@@ -341,7 +341,6 @@ static int mtdblock_open(struct mtd_blktrans_dev *mbd)
 	 */
 	mtdblk->block_map = NULL;
 	if (mbd->mtd->_block_isbad &&
-		!(mbd->mtd->flags & MTD_WRITEABLE) &&
 		mbd->mtd->oobsize &&
 		mbd->mtd->erasesize &&
 		strcmp(mbd->mtd->name, ro_fspart_name) == 0) {
@@ -432,7 +431,7 @@ static void mtdblock_add_mtd(struct mtd_blktrans_ops *tr, struct mtd_info *mtd)
 	dev->mbd.size = mtd->size >> 9;
 	dev->mbd.tr = tr;
 
-	if (!(mtd->flags & MTD_WRITEABLE))
+	if (!(mtd->flags & MTD_WRITEABLE) || (strcmp(mtd->name, ro_fspart_name) == 0))
 		dev->mbd.readonly = 1;
 
 	if (add_mtd_blktrans_dev(&dev->mbd))
