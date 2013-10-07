@@ -1207,8 +1207,8 @@ static int __init gpu_init(void)
     gpu_resources[2].start = 0;
     gpu_resources[2].end  = 512-1;
 #else
-    gpu_resources[2].start = CONFIG_MV88DE3015_GPUMEM_START;
-    gpu_resources[2].end   = CONFIG_MV88DE3015_GPUMEM_START + CONFIG_MV88DE3015_GPUMEM_SIZE - 1;
+    gpu_resources[2].start = CONFIG_BERLIN_GPUMEM_START;
+    gpu_resources[2].end   = CONFIG_BERLIN_GPUMEM_START + CONFIG_BERLIN_GPUMEM_SIZE - 1;
 #endif
     /* Allocate device */
     gpu_device = platform_device_alloc(DRV_NAME, -1);
