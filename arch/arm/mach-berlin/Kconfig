@@ -71,19 +71,19 @@ config BERLIN_GPUMEM_FROM_SHM
         default y
         help
           set to y to allocate GPU memory from SHM;
-          if reserve GPU MEM in Linux kernel(MV88DE3100_GPUMEM_START,
-          MV88DE3100_GPUMEM_SIZE),then set to n
+          if reserve GPU MEM in Linux kernel(BERLIN_GPUMEM_START,
+          BERLIN_GPUMEM_SIZE),then set to n
 
 config BERLIN_GPUMEM_START
         hex "Physical start of GPU memory"
-        depends on !MV88DE3100_GPUMEM_FROM_SHM
+        depends on !BERLIN_GPUMEM_FROM_SHM
         default 0x22400000
         help
           The physical start of GPU memory, in bytes.
 
 config BERLIN_GPUMEM_SIZE
         hex "Size of GPU memory"
-        depends on !MV88DE3100_GPUMEM_FROM_SHM
+        depends on !BERLIN_GPUMEM_FROM_SHM
         default 0x00000000
         help
           Size of GPU memory, in bytes.
