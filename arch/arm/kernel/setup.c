@@ -138,6 +138,7 @@ static const char *machine_name;
 static char __initdata cmd_line[COMMAND_LINE_SIZE];
 struct machine_desc *machine_desc __initdata;
 
+static char default_command_line[COMMAND_LINE_SIZE] __initdata = CONFIG_CMDLINE;
 static union { char c[4]; unsigned long l; } endian_test __initdata = { { 'l', '?', '?', 'b' } };
 #define ENDIANNESS ((char)endian_test.l)
 
@@ -735,7 +736,7 @@ void __init setup_arch(char **cmdline_p)
 	if (!mdesc)
 		mdesc = setup_machine_tags(__atags_pointer, __machine_arch_type);
 	else if (mdesc->fixup) {
-		char *from = NULL;
+		char *from = default_command_line;
 		mdesc->fixup(NULL, &from, &meminfo);
 		/* parse_early_param needs a boot_command_line */
 		if (from) {
