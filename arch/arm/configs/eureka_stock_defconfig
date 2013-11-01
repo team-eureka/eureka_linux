@@ -38,7 +38,8 @@ CONFIG_ZBOOT_ROM_TEXT=0x0
 CONFIG_ZBOOT_ROM_BSS=0x0
 CONFIG_ARM_APPENDED_DTB=y
 CONFIG_ARM_ATAG_DTB_COMPAT=y
-CONFIG_CMDLINE="macaddr=00:50:43:01:1E:3D console=ttyS0,115200 root=/dev/nfs nfsroot=10.37.116.100:/home/jszhang/static_bb,v3 ip=dhcp pxa3xx_nand.use_cache_program=0 mtdparts=mv_nand:2G(test)"
+CONFIG_CMDLINE="init=/init console=ttyS0,115200 mtdblock.ro_fspart=rootfs ro"
+CONFIG_CMDLINE_EXTEND=y
 CONFIG_VFP=y
 CONFIG_NEON=y
 # CONFIG_CORE_DUMP_DEFAULT_ELF_HEADERS is not set
