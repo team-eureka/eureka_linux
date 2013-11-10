@@ -117,6 +117,9 @@ config BERLIN_SDIO_WLAN_8787
 	tristate "SDIO Wlan (IEEE802.11 A|B|G|N) driver for wlan8787 module"
 	default n
 	depends on MMC_SDHCI_MV
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	select WEXT_SPY
 	help
 	  This is the wifi module for Berlin. Please try build it for module only.
 
