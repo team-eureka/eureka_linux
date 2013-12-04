@@ -23,6 +23,8 @@
 
 #define ONE_MB     (1024 * 1024)
 
+int __initdata board_rev;
+
 static int bcb_fts_reboot_hook(struct notifier_block*, unsigned long, void*);
 
 /* We need to reserve chunk of system memory for Marvell SDK.
@@ -31,6 +33,7 @@ static int bcb_fts_reboot_hook(struct notifier_block*, unsigned long, void*);
  */
 static __initdata struct board_config {
     char *name;
+    unsigned int board_rev;
     unsigned long sdk_pool; /* how much memory is reserved, normal boot */
     unsigned long sdk_pool_recovery;            /* ... recovery boot */
 
@@ -54,6 +57,7 @@ static __initdata struct board_config {
 
 } boards[] = {
     { .name = "bg2proto",
+      .board_rev = 0,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -89,6 +93,7 @@ static __initdata struct board_config {
       .mtdparts_recovery = BG2PROTO_MTDPARTS(""),
     },
     { .name = "eureka-b1",
+      .board_rev = 1,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -120,6 +125,7 @@ static __initdata struct board_config {
       .mtdparts_recovery = EUREKA_B1_MTDPARTS("",""),
     },
     { .name = "eureka-b2",
+      .board_rev = 2,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -151,6 +157,7 @@ static __initdata struct board_config {
       .mtdparts_recovery = EUREKA_B2_MTDPARTS(""),
     },
     { .name = "eureka-b3",
+      .board_rev = 3,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -260,7 +267,6 @@ static __init char *get_cmdline(void)
     return boot_command_line_copy;
 }
 
-
 /* Handle android specific kernel boot params and memory setup.
  * This function takes care of processing command line ATAG and
  * copying/updating mv88de31xx_command_line used in later part of kernel
@@ -299,6 +305,9 @@ void __init mv88de31xx_android_fixup(char **from)
         strlcpy(board_name, DEFAULT_BOARD, sizeof(board_name));
         BUG_ON(!cfg);
     }
+
+    // Save board_rev
+    board_rev = cfg->board_rev;
 
     /* Add root device if it wasn't specified explicitly */
     if (!recovery_boot && !root[0])

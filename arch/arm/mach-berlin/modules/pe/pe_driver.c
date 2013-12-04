@@ -357,6 +357,9 @@ typedef struct pe_message_queue {
 
 static PEMsgQ_t hPEMsgQ;
 
+volatile static UINT prev_intr=0;
+static UINT total_hpd=0, dropped_hpd=0;
+
 static HRESULT PEMsgQ_Add(PEMsgQ_t *pMsgQ, MV_CC_MSG_t *pMsg)
 {
 	INT wr_offset;
@@ -867,6 +870,7 @@ static irqreturn_t pe_devices_vpp_cec_isr(int irq, void *dev_id)
 		{
 			MV_CC_MSG_t msg =
 			    { VPP_CC_MSG_TYPE_CEC, reg, vpp_intr_timestamp };
+			prev_intr = 0;
 			spin_lock(&msgQ_spinlock);
 			ret = PEMsgQ_Add(&hPEMsgQ, &msg);
 			spin_unlock(&msgQ_spinlock);
@@ -1120,6 +1124,8 @@ static irqreturn_t pe_devices_vpp_isr(int irq, void *dev_id)
 #else
 		vpp_intr = 1;
 #endif
+		total_hpd++;
+
 		bSET(instat_used, avioDhubSemMap_vpp_vppOUT3_intr);
 
 		/* VOUT3 interrupt */
@@ -1211,6 +1217,22 @@ static irqreturn_t pe_devices_vpp_isr(int irq, void *dev_id)
 #if CONFIG_VPP_IOCTL_MSG
 
 #if CONFIG_VPP_ISR_MSGQ
+
+		if( bTST(prev_intr, avioDhubSemMap_vpp_vppOUT3_intr) &&
+				bTST(instat,avioDhubSemMap_vpp_vppOUT3_intr) &&
+				PEMsgQ_Fullness(&hPEMsgQ) &&
+#ifdef NEW_ISR
+				!(vpp_intr & (~bSETMASK(avioDhubSemMap_vpp_vppOUT3_intr)))
+#else
+				!(instat & (~bSETMASK(avioDhubSemMap_vpp_vppOUT3_intr)))
+#endif
+				)
+		{
+			dropped_hpd++;
+			return IRQ_HANDLED;
+		}
+		else {
+			prev_intr =	instat;
 		MV_CC_MSG_t msg =
 		    { VPP_CC_MSG_TYPE_VPP,
 #ifdef NEW_ISR
@@ -1222,6 +1244,8 @@ static irqreturn_t pe_devices_vpp_isr(int irq, void *dev_id)
  		spin_lock(&msgQ_spinlock);
 		ret = PEMsgQ_Add(&hPEMsgQ, &msg);
 		spin_unlock(&msgQ_spinlock);
+		}
+
 		if(ret != S_OK) {
 			if (!atomic_read(&vpp_isr_msg_err_cnt)) {
 				pe_error(" E/[vpp isr] MsgQ full, task deadlock or segment fault\n");

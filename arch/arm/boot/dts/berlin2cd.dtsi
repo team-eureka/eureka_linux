@@ -378,6 +378,12 @@
 			mrvl,nfc-arbi;
 		};
 
+
+		pwm@F7F20000 {
+			compatible = "mrvl,berlin-pwm";
+			reg = <0xF7F20000 0x40>;
+		};
+
 		tsen@F7FCD000 {
 			compatible = "mrvl,berlin-tsen-adc33";
 			reg = <0xF7FCD000 0x100>;

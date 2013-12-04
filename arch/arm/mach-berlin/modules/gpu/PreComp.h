@@ -32,8 +32,8 @@
 #include <asm/io.h>
 #include <asm/uaccess.h>
 
-#define gcmTRACE_ZONE
-#define gcmTRACE
+#define gcmTRACE_ZONE(...)
+#define gcmTRACE(...)
 
 #define FIND_TASK_BY_PID(x) find_task_by_vpid(x)
 
