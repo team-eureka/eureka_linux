@@ -57,7 +57,7 @@ static __initdata struct board_config {
 
 } boards[] = {
     { .name = "bg2proto",
-	  .board_rev = 0,
+      .board_rev = 0,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -93,7 +93,7 @@ static __initdata struct board_config {
       .mtdparts_recovery = BG2PROTO_MTDPARTS(""),
     },
     { .name = "eureka-b1",
-	  .board_rev = 1,
+      .board_rev = 1,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -125,7 +125,7 @@ static __initdata struct board_config {
       .mtdparts_recovery = EUREKA_B1_MTDPARTS("",""),
     },
     { .name = "eureka-b2",
-	  .board_rev = 2,
+      .board_rev = 2,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -157,7 +157,7 @@ static __initdata struct board_config {
       .mtdparts_recovery = EUREKA_B2_MTDPARTS(""),
     },
     { .name = "eureka-b3",
-	  .board_rev = 3,
+      .board_rev = 3,
       /* TODO(kolla): Remove hardcoded system/sdk memory configs from
        * kernel config and use board_config info.
        */
@@ -304,8 +304,8 @@ void __init mv88de31xx_android_fixup(char **from)
         strlcpy(board_name, DEFAULT_BOARD, sizeof(board_name));
         BUG_ON(!cfg);
     }
-	
-	// Save board_rev
+
+    // Save board_rev
     board_rev = cfg->board_rev;
 
     /* Add root device if it wasn't specified explicitly */

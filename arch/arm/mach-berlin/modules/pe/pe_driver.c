@@ -1125,7 +1125,7 @@ static irqreturn_t pe_devices_vpp_isr(int irq, void *dev_id)
 		vpp_intr = 1;
 #endif
 		total_hpd++;
-		
+
 		bSET(instat_used, avioDhubSemMap_vpp_vppOUT3_intr);
 
 		/* VOUT3 interrupt */
@@ -1245,7 +1245,7 @@ static irqreturn_t pe_devices_vpp_isr(int irq, void *dev_id)
 		ret = PEMsgQ_Add(&hPEMsgQ, &msg);
 		spin_unlock(&msgQ_spinlock);
 		}
-		
+
 		if(ret != S_OK) {
 			if (!atomic_read(&vpp_isr_msg_err_cnt)) {
 				pe_error(" E/[vpp isr] MsgQ full, task deadlock or segment fault\n");
