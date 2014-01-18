@@ -125,6 +125,11 @@ config BERLIN_FASTLOGO
 	default n
 	help
 	  Enable support for fast logo
+	  
+config BERLIN_PWM
+	bool "Support PWM"
+	default n
+	  Enable support for PWM	  
 
 endmenu
 
