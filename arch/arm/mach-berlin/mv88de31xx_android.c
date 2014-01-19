@@ -80,7 +80,7 @@ static __initdata struct board_config {
       "60M(recovery),"                                 \
       "80M(backupsys)ro,"                              \
       "16M(factory_store)ro,"                          \
-      "400M(rootfs)" __RO__ ","                        \
+      "400M(rootfs),"                                  \
       "32M(localstorage),"                             \
       "300M(cache),"                                   \
       "1024M(userdata),"                               \
@@ -116,7 +116,7 @@ static __initdata struct board_config {
       "60M(recovery),"                                 \
       "80M(backupsys),"                                \
       "16M(factory_store)ro,"                          \
-      "400M(rootfs)" __RO__","                         \
+      "400M(rootfs),"                                  \
       "300M(cache),"                                   \
       "1024M(userdata),"                               \
       "8M@2040M(bbt)ro"
@@ -144,7 +144,7 @@ static __initdata struct board_config {
       "1M(block0)ro," /* flash config params */              \
       "8M(bootloader)ro," /* 8x copies */                    \
       "16M(kernel)"__RO__ ","                                \
-      "400M(rootfs)"__RO__ ","                               \
+      "400M(rootfs),"                                        \
       "300M(cache),"                                         \
       "1147M(userdata),"                                     \
       "48M(recovery),"                                       \
@@ -176,7 +176,7 @@ static __initdata struct board_config {
       "1M(block0)ro," /* flash config params */              \
       "8M(bootloader)ro," /* 8x copies */                    \
       "16M(kernel)"__RO__ ","                                \
-      "400M(rootfs)"__RO__ ","                               \
+      "400M(rootfs),"                                        \
       "300M(cache),"                                         \
       "1147M(userdata),"                                     \
       "48M(recovery),"                                       \
