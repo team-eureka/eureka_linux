@@ -15,6 +15,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/moduleparam.h>
+#include <linux/random.h>
 #include <linux/reboot.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -244,6 +245,12 @@ static int __init do_param(char *param, char *val, const char *unused)
 
     if (!strcmp(param, "root") && val)
         strlcpy(root, val, sizeof(root));
+
+    if (!strcmp(param, "prng_data") && val) {
+        int size = strlen(val);
+        early_print(KERN_INFO "Add randomness with %d bytes\n", size);
+        add_device_randomness(val, size);
+    }
 
     /* Re-add this parameter back */
     add_boot_param(param, val);

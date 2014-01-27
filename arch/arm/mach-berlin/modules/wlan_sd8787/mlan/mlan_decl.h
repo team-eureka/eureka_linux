@@ -1143,6 +1143,12 @@ MLAN_API mlan_status mlan_ioctl(IN t_void * pmlan_adapter,
 MLAN_API t_u8 mlan_select_wmm_queue(IN t_void * pmlan_adapter,
 				    IN t_u8 bss_num, IN t_u8 tid);
 
+/** Callback for Probe Request Mgmt frame */
+typedef int (*MOAL_PEER_MGMT_FRAME_CB) ( t_s8 snr,
+                                      t_s8 nf,
+			              t_s8 sig_str,
+			              mlan_802_11_mac_addr mac);
+
 /** api to get the histogram data */
 MLAN_API int mlan_hist_data_get(
     OUT char *pBuf,
@@ -1156,4 +1162,7 @@ MLAN_API void* mlan_memcpy(
     IN void *pDest,
     IN void *pSrc,
     IN unsigned int count);
+
+/** api to register peer mgmt frame callback function*/
+MLAN_API int mlan_register_peer_mac_cb(MOAL_PEER_MGMT_FRAME_CB fn);
 #endif /* !_MLAN_DECL_H_ */

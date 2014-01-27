@@ -482,6 +482,75 @@ done:
 	return ret;
 }
 
+
+static MOAL_PEER_MGMT_FRAME_CB moal_peer_mgmt_frame_callback;
+
+int mlan_register_peer_mac_cb(MOAL_PEER_MGMT_FRAME_CB fn)
+{
+	moal_peer_mgmt_frame_callback = fn;
+	return 0;
+}
+
+
+#ifdef BIG_ENDIAN_SUPPORT
+/** Frame control: From DS */
+#define IEEE80211_GET_FC_MGMT_FRAME_FROM_DS(fc) (((fc) & 0x0040) >> 6)
+#else
+/** Frame control: From DS */
+#define IEEE80211_GET_FC_MGMT_FRAME_FROM_DS(fc) (((fc) & 0x00F0) >> 14)
+#endif
+
+mlan_status wlan_sta_check_mgmt_frame(mlan_private *priv, t_u8 *payload, t_u32 payload_len, RxPD *prxpd)
+{
+
+	pmlan_adapter pmadapter = priv->adapter;
+	pmlan_callbacks pcb = &pmadapter->callbacks;
+	mlan_status ret = MLAN_STATUS_SUCCESS;
+	wlan_802_11_header *pieee_pkt_hdr = MNULL;
+	t_u16 sub_type = 0;
+
+	/* Check packet type-subtype and compare with mgmt_passthru_mask If
+	   event is needed to host, just eventify it */
+	pieee_pkt_hdr = (wlan_802_11_header *) payload;
+	sub_type = IEEE80211_GET_FC_MGMT_FRAME_SUBTYPE(pieee_pkt_hdr->frm_ctl);
+
+	switch (sub_type) {
+	case SUBTYPE_PROBE_REQ:
+		{
+			t_s8 snr, sig_st, nf;
+			t_u16 fromDS;
+			wlan_802_11_header *ph = pieee_pkt_hdr;
+
+			snr = prxpd->snr;
+			nf = prxpd->nf;
+			sig_st = snr - nf;
+			fromDS = IEEE80211_GET_FC_MGMT_FRAME_FROM_DS(pieee_pkt_hdr->frm_ctl);
+			PRINTM(MINFO,"PRB_REQ:snr:%d,nf:%d,mac:%02x:%02x:%02x:%02x:%02x:%02x fromDS:%d\n",
+				snr,nf,ph->addr2[0],ph->addr2[1],ph->addr2[2],
+				ph->addr2[3],ph->addr2[4],ph->addr2[5],fromDS);
+			if ((0 == fromDS) && (moal_peer_mgmt_frame_callback))	{
+				/* OK, add this to peer list*/
+				moal_peer_mgmt_frame_callback(snr, nf, sig_st, ph->addr2);
+			}
+			else
+				PRINTM(MERROR,"peer callback function not registered!\n");
+		}
+		break;
+	case SUBTYPE_ASSOC_REQUEST:
+	case SUBTYPE_REASSOC_REQUEST:
+	case SUBTYPE_DISASSOC:
+	case SUBTYPE_DEAUTH:
+	case SUBTYPE_ACTION:
+	case SUBTYPE_AUTH:
+	case SUBTYPE_PROBE_RESP:
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
 /**
  *   @brief This function processes the received buffer
  *
@@ -534,7 +603,7 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 			wlan_le16_to_cpu(pmgmt_pkt_hdr->frm_len);
 
 		if ((pmgmt_pkt_hdr->wlan_header.frm_ctl
-		     & IEEE80211_FC_MGMT_FRAME_TYPE_MASK) == 0)
+		     & IEEE80211_FC_MGMT_FRAME_TYPE_MASK) == 0){
 			wlan_process_802dot11_mgmt_pkt(pmadapter->
 						       priv[pmbuf->bss_index],
 						       (t_u8 *) &
@@ -545,6 +614,14 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 						       -
 						       sizeof(pmgmt_pkt_hdr->
 							      frm_len));
+
+			wlan_sta_check_mgmt_frame(pmadapter->priv[pmbuf->bss_index],
+						  (t_u8 *) &pmgmt_pkt_hdr->wlan_header,
+						  pmgmt_pkt_hdr->frm_len +
+						  sizeof(wlan_mgmt_pkt) -
+						  sizeof(pmgmt_pkt_hdr->frm_len),
+						  prx_pd);
+		}
 		wlan_free_mlan_buffer(pmadapter, pmbuf);
 		goto done;
 	}

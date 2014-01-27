@@ -229,7 +229,6 @@ typedef t_u8 mlan_802_11_mac_addr[MLAN_MAC_ADDR_LENGTH];
 #define NOISE_FLR_MAX			256
 #define SIG_STRENGTH_MAX		256
 
-
 /** define SDIO block size for data Tx/Rx */
 /* We support up to 480-byte block size due to FW buffer limitation. */
 #define MLAN_SDIO_BLOCK_SIZE		256
@@ -1144,13 +1143,19 @@ MLAN_API mlan_status mlan_ioctl(IN t_void * pmlan_adapter,
 MLAN_API t_u8 mlan_select_wmm_queue(IN t_void * pmlan_adapter,
 				    IN t_u8 bss_num, IN t_u8 tid);
 
+/** Callback for Probe Request Mgmt frame */
+typedef int (*MOAL_PEER_MGMT_FRAME_CB) ( t_s8 snr,
+                                      t_s8 nf,
+			              t_s8 sig_str,
+			              mlan_802_11_mac_addr mac);
+
 /** api to get the histogram data */
 MLAN_API int mlan_hist_data_get(
     OUT char *pBuf,
     OUT unsigned int *pNumSamples);
 
 /** api to clear existing histogram data */
-MLAN_API int mlan_hist_data_clear();
+MLAN_API int mlan_hist_data_clear(void);
 
 /** memcpy implementation for mlan */
 MLAN_API void* mlan_memcpy(
@@ -1158,4 +1163,6 @@ MLAN_API void* mlan_memcpy(
     IN void *pSrc,
     IN unsigned int count);
 
+/** api to register peer mgmt frame callback function*/
+MLAN_API int mlan_register_peer_mac_cb(MOAL_PEER_MGMT_FRAME_CB fn);
 #endif /* !_MLAN_DECL_H_ */

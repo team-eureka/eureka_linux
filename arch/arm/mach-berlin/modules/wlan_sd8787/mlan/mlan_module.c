@@ -44,6 +44,7 @@ EXPORT_SYMBOL(mlan_interrupt);
 EXPORT_SYMBOL(mlan_hist_data_get);
 EXPORT_SYMBOL(mlan_hist_data_clear);
 EXPORT_SYMBOL(mlan_memcpy);
+EXPORT_SYMBOL(mlan_register_peer_mac_cb);
 
 MODULE_DESCRIPTION("M-WLAN MLAN Driver");
 MODULE_AUTHOR("Marvell International Ltd.");

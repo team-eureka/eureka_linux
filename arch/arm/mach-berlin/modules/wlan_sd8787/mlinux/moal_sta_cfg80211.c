@@ -23,6 +23,8 @@
 #include "moal_sta_cfg80211.h"
 #include "moal_eth_ioctl.h"
 
+extern int cfg80211_wext;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0)
 static void
 #else
@@ -1417,8 +1419,8 @@ woal_cfg80211_assoc(moal_private * priv, void *sme)
 		ie_len = conn_param->ie_len;
 		privacy = conn_param->privacy;
 		bss = cfg80211_get_bss(priv->wdev->wiphy, channel, bssid, ssid,
-				       ssid_len, WLAN_CAPABILITY_ESS,
-				       WLAN_CAPABILITY_ESS);
+				ssid_len, WLAN_CAPABILITY_ESS,
+				WLAN_CAPABILITY_ESS);
 		if (bss) {
 			woal_process_country_ie(priv, bss);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0)
@@ -1428,6 +1430,33 @@ woal_cfg80211_assoc(moal_private * priv, void *sme)
 #endif
 		} else
 			woal_send_domain_info_cmd_fw(priv, MOAL_IOCTL_WAIT);
+		if (IS_STA_WEXT(cfg80211_wext)) {
+			switch(conn_param->crypto.wpa_versions){
+				case NL80211_WPA_VERSION_2:
+					priv->wpa_version = IW_AUTH_WPA_VERSION_WPA2;
+					break;
+				case NL80211_WPA_VERSION_1:
+					priv->wpa_version = IW_AUTH_WPA_VERSION_WPA;
+					break;
+				default:
+					priv->wpa_version = 0;
+					break;
+			}
+			if (conn_param->crypto.n_akm_suites) {
+				switch (conn_param->crypto.akm_suites[0]) {
+					case WLAN_AKM_SUITE_PSK:
+						priv->key_mgmt = IW_AUTH_KEY_MGMT_PSK;
+						break;
+					case WLAN_AKM_SUITE_8021X:
+						priv->key_mgmt =
+							IW_AUTH_KEY_MGMT_802_1X;
+						break;
+					default:
+						priv->key_mgmt = 0;
+						break;
+				}
+			}
+		}
 	}
 
 	memset(&req_ssid, 0, sizeof(mlan_802_11_ssid));
@@ -2093,7 +2122,7 @@ done:
 		priv->scan_request = NULL;
 		spin_unlock(&priv->scan_req_lock);
 	} else {
-		PRINTM(MMSG, "wlan: START SCAN\n");
+		PRINTM(MINFO, "wlan: START SCAN\n");
 	}
 	LEAVE();
 	return ret;

@@ -4795,6 +4795,8 @@ done:
 }
 #endif /* STA_SUPPORT */
 
+extern int woal_peer_mgmt_frame_ioctl(t_u16 mask);
+
 /**
  *  @brief Set/Get Mgmt Frame passthru mask
  *
@@ -4843,6 +4845,8 @@ woal_priv_mgmt_frame_passthru_ctrl(moal_private * priv, t_u8 * respbuf,
 		} else {	/* Set */
 			mgmt_cfg->param.mgmt_subtype_mask = data;
 			req->action = MLAN_ACT_SET;
+			//Set the proc variable 'enable'
+			woal_peer_mgmt_frame_ioctl((t_u16) mgmt_cfg->param.mgmt_subtype_mask);
 		}
 	}
 
