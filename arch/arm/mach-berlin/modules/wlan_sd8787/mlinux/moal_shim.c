@@ -1588,7 +1588,7 @@ moal_recv_event(IN t_void * pmoal_handle, IN pmlan_event pmevent)
 
 				if (!freq) {
 					if (!priv->phandle->chan.center_freq) {
-						PRINTM(MERROR,
+						PRINTM(MINFO,
 						       "Skip to report mgmt packet to cfg80211\n");
 						break;
 					}

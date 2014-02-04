@@ -27,6 +27,7 @@ Change log:
 #include	"moal_main.h"
 #include "mlan_decl.h"
 #include "linux/seq_file.h"
+#include "linux/list.h"
 
 /********************************************************
 		Global Variables
@@ -493,6 +494,18 @@ hgm_seq_show(struct seq_file *s, void *v)
 	int nflr_max = snr_max + NOISE_FLR_MAX;
 	int sigs_max = nflr_max + SIG_STRENGTH_MAX;
 	int i,nTemp;
+	struct debug_data_priv *pdbg_data_priv;
+	struct debug_data *pdbg_data;
+	moal_private *pmoal_priv=NULL;
+
+	if (s){
+		pdbg_data_priv = (struct debug_data_priv *)s->private;
+		pdbg_data = pdbg_data_priv->items;
+		pmoal_priv =  pdbg_data_priv->priv;
+	}
+	else
+		PRINTM(MERROR,"hgm_seq_show(): s == NULL!\n");
+
 
 	pos = hgm->pos;
 
@@ -567,7 +580,16 @@ static struct seq_operations hgm_seq_ops = {
 
 static int hgm_seq_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &hgm_seq_ops);
+	int ret;
+	ret =  seq_open(file, &hgm_seq_ops);
+	if (!ret){
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+		((struct seq_file *)file->private_data)->private = PDE_DATA(inode);
+#else
+		((struct seq_file *)file->private_data)->private = PDE(inode)->data;
+#endif
+	}
+	return ret;
 }
 
 static unsigned int woal_debug_get_uint(char *pBuf)
@@ -584,6 +606,423 @@ woal_debug_write_histogram(struct file *filp, const char __user *buf,
 	mlan_hist_data_clear();
 	return count;
 }
+
+/**************** Peers Support ************************/
+
+/*
+<mask>  : the bit mask of management frame reception.
+	: Bit 0 - Association Request
+	: Bit 1 - Association Response
+	: Bit 2 - Re-Association Request
+	: Bit 3 - Re-Association Response
+	: Bit 4 - Probe Request
+	: Bit 5 - Probe Response
+	: Bit 8 - Beacon Frames
+ */
+#define MGMT_FRAME_MASK_PROBE_REQ 0x10
+#define PEER_PRINT_SIZE 1500
+static int peerScanEnable;
+static struct semaphore woal_peer_sem;
+
+typedef struct {
+	t_s8 snr; //signal to noise ratio
+	t_s8 nf;  //noise floor in dBm
+	t_s8 sig_str; //signal strength in dBm
+	mlan_802_11_mac_addr mac; //mac address of peer
+	struct list_head list;
+} _peer_data;
+
+_peer_data *pPeerList;
+static t_u16 woal_peer_list_size;
+
+static t_u16 seq_read_numItemsDone;
+
+static int woal_peer_add_peer(t_s8 snr, t_s8 nf, t_s8 sig_str, mlan_802_11_mac_addr mac);
+static int woal_peer_delete_peer_list();
+
+static int peer_get_mgmt_frame_mask(moal_private *priv, int *pmask, int get)
+{
+	int ret = -1;
+	mlan_ioctl_req *preq = NULL;
+	mlan_ds_misc_cfg *pmgmt_cfg = NULL;
+
+	preq = woal_alloc_mlan_ioctl_req(sizeof(mlan_ds_misc_cfg));
+	if (preq == NULL){
+		return -ENOMEM;
+	}
+
+	pmgmt_cfg = (mlan_ds_misc_cfg *) preq->pbuf;
+	preq->req_id = MLAN_IOCTL_MISC_CFG;
+	pmgmt_cfg->sub_command = MLAN_OID_MISC_RX_MGMT_IND;
+
+	if (get)
+		preq->action = MLAN_ACT_GET;
+	else {
+		preq->action = MLAN_ACT_SET;
+		pmgmt_cfg->param.mgmt_subtype_mask = *pmask;
+	}
+
+	if (MLAN_STATUS_SUCCESS != woal_request_ioctl(priv, preq, MOAL_IOCTL_WAIT)) {
+		kfree(preq);
+		return -EFAULT;
+	}
+	*pmask = pmgmt_cfg->param.mgmt_subtype_mask;
+	kfree(preq);
+	return 0;
+}
+
+int peer_seq_lock()
+{
+	down_interruptible(&woal_peer_sem);
+	return 0;
+}
+
+int peer_seq_unlock()
+{
+	up(&woal_peer_sem);
+	return 0;
+}
+
+static void *
+peers_seq_start(struct seq_file *s, loff_t *pos)
+{
+	peer_seq_lock();
+	if ( 0 == *pos) {
+            seq_read_numItemsDone = 0;
+	    peer_seq_unlock();
+		PRINTM(MINFO, "peers_seq_start: pos == 0, list_size = %d\n",woal_peer_list_size);
+            return &seq_read_numItemsDone;
+	}
+	else if (*pos < woal_peer_list_size) {
+	    peer_seq_unlock();
+		PRINTM(MINFO, "peers_seq_start pos =  %d list_size = %d\n",*pos,woal_peer_list_size);
+	    return &seq_read_numItemsDone;
+	}
+	else {
+	    peer_seq_unlock();
+		PRINTM(MINFO, "peers_seq_start DONE!! pos =  %d\n",*pos);
+	    return NULL;
+	}
+}
+
+
+static int
+peers_seq_show(struct seq_file *s, void *v)
+{
+	struct debug_data_priv *pdbg_data_priv;
+	struct debug_data *pdbg_data;
+	moal_private *pmoal_priv=NULL;
+	t_u16 *pnumItemsDone = (t_u16 *) v;
+	t_u16 curr_pos = 0;
+	t_u16 ix = 0;
+
+
+	_peer_data *ptmp;
+	struct list_head *pos, *q;
+	t_u8 temp_buf[100];
+
+	if (s){
+		pdbg_data_priv = (struct debug_data_priv *)s->private;
+		pdbg_data = pdbg_data_priv->items;
+		pmoal_priv =  pdbg_data_priv->priv;
+	}
+
+	peer_seq_lock();
+	PRINTM(MINFO, "peers_seq_show v=%x, numDone=%d total available=%d\n",v,*pnumItemsDone,woal_peer_list_size);
+	if (0 == *pnumItemsDone){
+		seq_printf(s, "enable=%d\n",peerScanEnable);
+		seq_printf(s, "num entries=%d\n",woal_peer_list_size);
+	}
+
+	if (!pPeerList){
+		peer_seq_unlock();
+		return 0;
+	}
+
+	list_for_each(pos, &pPeerList->list){
+		ptmp= list_entry(pos, _peer_data, list);
+		ix++;
+
+		if ((ix) && (ix <= *pnumItemsDone)) continue;
+
+		if (curr_pos > PEER_PRINT_SIZE) {
+			peer_seq_unlock();
+			//To make sure we are well within page size
+			PRINTM(MINFO,"\n\n curr_pos > %d\n",PEER_PRINT_SIZE);
+			return 0;
+		}
+
+		sprintf(temp_buf,"%3d) %02x:%02x:%02x:%02x:%02x:%02x  noise_flr= -%ddBm  sig_strength= %ddBm  snr= %ddBm\n",
+				ix,ptmp->mac[0],ptmp->mac[1],ptmp->mac[2],ptmp->mac[3],ptmp->mac[4],ptmp->mac[5],
+				ptmp->nf,ptmp->sig_str,ptmp->snr);
+
+		curr_pos += strlen(temp_buf);
+		seq_printf(s, "%s",temp_buf);
+		(*pnumItemsDone)++;
+
+	}
+
+	PRINTM(MINFO, "peers_seq_show RETURNING: v=%x, numDone=%d\n",v,*pnumItemsDone);
+	peer_seq_unlock();
+	return 0;
+}
+
+static void *
+peers_seq_next(struct seq_file *s, void *v, loff_t *pos)
+{
+	t_u16 *pnumItemsDone = (t_u16 *) v;
+
+	peer_seq_lock();
+	*pos = *pnumItemsDone;
+
+	if (!pPeerList){
+		peer_seq_unlock();
+		return NULL;
+	}
+
+	if (*pnumItemsDone < woal_peer_list_size){
+		PRINTM(MINFO, "peers_seq_next,retrying:v = %x num_done:%d, list size:%d\n",v,*pnumItemsDone, woal_peer_list_size);
+		peer_seq_unlock();
+		return v;
+	}
+
+	PRINTM(MINFO," peers_seq_next: Done printing (%d items),total=%d\n",*pnumItemsDone,woal_peer_list_size);
+	peer_seq_unlock();
+	return NULL;
+}
+
+static void
+peers_seq_stop(struct seq_file *s, void *v)
+{
+	PRINTM(MINFO, "peers_seq_stop\n");
+	return;
+}
+
+static struct seq_operations peer_seq_ops = {
+	.start = peers_seq_start,
+	.next  = peers_seq_next,
+	.stop  = peers_seq_stop,
+	.show  = peers_seq_show
+};
+
+static int peers_seq_open(struct inode *inode, struct file *file)
+{
+	int ret;
+	ret =  seq_open(file, &peer_seq_ops);
+	if (!ret){
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+		((struct seq_file *)file->private_data)->private = PDE_DATA(inode);
+#else
+		((struct seq_file *)file->private_data)->private = PDE(inode)->data;
+#endif
+	}
+	return ret;
+}
+
+
+static int
+woal_debug_write_peers(struct file *filp, const char __user *buf,
+	size_t count, loff_t *ppos)
+{
+	int r;
+	char *pdata;
+	char *p0,*p1,*p2;
+
+	struct seq_file *s = filp->private_data;
+	struct debug_data_priv *pdbg_data_priv;
+	struct debug_data *pdbg_data;
+	moal_private *pmoal_priv=NULL;
+
+	if (s){
+		pdbg_data_priv = (struct debug_data_priv *)s->private;
+		pdbg_data = pdbg_data_priv->items;
+		pmoal_priv =  pdbg_data_priv->priv;
+	}
+
+	pdata = (char *) kmalloc( count+1, GFP_KERNEL);
+	if (NULL == pdata){
+		return 0;
+	}
+	memset(pdata, 0, count+1);
+
+	if (copy_from_user(pdata, buf, count)){
+		PRINTM(MERROR, "Copy from user failed \n");
+	        kfree(pdata);
+		return 0;
+	}
+
+	p0 = pdata;
+	p1 = strstr(p0,"enable");
+	if (NULL == p1){
+		kfree(pdata);
+		return 0;
+	}
+
+	p2 = strstr(p1,"=");
+	if (NULL == p2){
+		kfree(pdata);
+		return 0;
+	}
+	p2++;
+	r = woal_string_to_number(p2);
+
+
+	peer_seq_lock();
+	if (0 == r){
+		peerScanEnable = 0;
+	}
+	else {
+		peerScanEnable = 1;
+	}
+	peer_seq_unlock();
+
+	do {
+		int mgmt_mask, get;
+
+		get = 1;
+		if (0 != peer_get_mgmt_frame_mask(pmoal_priv, &mgmt_mask, get)){
+			PRINTM(MERROR,"Failed to get mgmt_mask\n");
+			break;
+		}
+
+		get = 0;
+		peer_seq_lock();
+		if (peerScanEnable)
+			mgmt_mask |= MGMT_FRAME_MASK_PROBE_REQ;
+		else
+			mgmt_mask &= ~MGMT_FRAME_MASK_PROBE_REQ;
+		peer_seq_unlock();
+		if (0 != peer_get_mgmt_frame_mask(pmoal_priv, &mgmt_mask, get)){
+			PRINTM(MERROR,"Failed to set mgmt_mask\n");
+			break;
+		}
+	} while (0);
+
+	peer_seq_lock();
+	if (!peerScanEnable){
+		peer_seq_unlock();
+		woal_peer_delete_peer_list();
+	}
+	else {
+		peer_seq_unlock();
+	}
+
+	kfree(pdata);
+
+return count;
+}
+
+int woal_peer_mgmt_frame_callback( t_s8 snr, t_s8 nf, t_s8 sig_str,
+			           mlan_802_11_mac_addr mac)
+{
+	woal_peer_add_peer(snr, nf, sig_str, mac);
+	return 0;
+}
+
+static int is_mac_addr_same(t_u8 *a1, t_u8 *a2)
+{
+	int ix;
+	for (ix = 0; ix < MLAN_MAC_ADDR_LENGTH; ix++){
+		if (a1[ix] != a2[ix])
+			return 0;
+	}
+	return 1;
+}
+
+int woal_peer_add_peer(t_s8 snr, t_s8 nf, t_s8 sig_str, mlan_802_11_mac_addr mac)
+{
+	/* We first check if this peer is already present*/
+	/* If present, update rssi info, else add new entry*/
+
+	PRINTM(MINFO,"woal_peer_add_peer(),mac:%02x:%02x:%02x:%02x:%02x:%02x\n",
+			mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+	peer_seq_lock();
+	if (pPeerList){
+
+		_peer_data *ptmp;
+		struct list_head *pos;
+		//Search for existing duplicate entries
+
+		list_for_each(pos, &pPeerList->list){
+			ptmp= list_entry(pos, _peer_data, list);
+			if (is_mac_addr_same((t_u8 *) ptmp->mac, (t_u8 *) mac)){
+				// Entry present, update RSSI
+				ptmp->snr = snr;
+				ptmp->nf  = nf;
+				ptmp->sig_str = sig_str;
+				PRINTM(MINFO,"Entry Updated!\n");
+				peer_seq_unlock();
+				return 0;
+			}
+		}
+
+		ptmp = (_peer_data *) kmalloc(sizeof(_peer_data),GFP_KERNEL);
+		if (!ptmp){
+			peer_seq_unlock();
+			return -1;
+		}
+		ptmp->snr = snr;
+		ptmp->nf  = nf;
+		ptmp->sig_str = sig_str;
+		mlan_memcpy(ptmp->mac, mac, MLAN_MAC_ADDR_LENGTH);
+		list_add(&(ptmp->list), &(pPeerList->list));
+		woal_peer_list_size++;
+		PRINTM(MINFO,"Entry (%02x:%02x:%02x:%02x:%02x:%02x) added, total:%d!\n",
+				mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],woal_peer_list_size);
+
+	}
+	else
+	{
+		pPeerList = (_peer_data *) kmalloc(sizeof(_peer_data),GFP_KERNEL);
+		if (!pPeerList) return -1;
+		pPeerList->snr = snr;
+		pPeerList->nf  = nf;
+		pPeerList->sig_str = sig_str;
+		mlan_memcpy(pPeerList->mac, mac, MLAN_MAC_ADDR_LENGTH);
+		INIT_LIST_HEAD(&(pPeerList->list));
+		PRINTM(MINFO," woal_peer_add_peer: List created (%p)!\n", pPeerList);
+	}
+	peer_seq_unlock();
+
+	return 0;
+}
+
+int woal_peer_delete_peer_list()
+{
+	peer_seq_lock();
+	if (pPeerList){
+		_peer_data *ptmp, *q;
+		struct list_head *pos;
+
+		list_for_each_safe(pos, q, &pPeerList->list){
+			ptmp = list_entry(pos, _peer_data, list);
+			list_del(pos);
+			kfree(ptmp);
+		}
+		woal_peer_list_size = 0;
+		kfree(pPeerList);
+		pPeerList = NULL;
+	}
+	peer_seq_unlock();
+	return 0;
+}
+
+int woal_peer_mgmt_frame_ioctl(t_u16 mask)
+{
+	PRINTM(MINFO,"woal_peer_mgmt_frame_ioctl(): mask: 0x%x\n",mask);
+	peer_seq_lock();
+	if (mask & MGMT_FRAME_MASK_PROBE_REQ){
+		peerScanEnable = 1;
+		peer_seq_unlock();
+	}
+	else {
+		peerScanEnable = 0;
+		peer_seq_unlock();
+		woal_peer_delete_peer_list();
+	}
+	return 0;
+}
+
 /********************************************************
 		Local Functions
 ********************************************************/
@@ -882,6 +1321,15 @@ static struct file_operations hgm_file_ops = {
 	.release = seq_release
 };
 
+static struct file_operations peers_file_ops = {
+	.owner   = THIS_MODULE,
+	.open    = peers_seq_open,
+	.write   = woal_debug_write_peers,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = seq_release
+};
+
 
 /********************************************************
 		Global Functions
@@ -898,6 +1346,7 @@ woal_debug_entry(moal_private * priv)
 {
 	struct proc_dir_entry *r;
     struct proc_dir_entry *r2;
+    struct proc_dir_entry *r3;
 	int i;
 	int handle_items;
 
@@ -920,6 +1369,7 @@ woal_debug_entry(moal_private * priv)
 		memcpy(priv->items_priv.items, items, sizeof(items));
 		priv->items_priv.num_of_items = ARRAY_SIZE(items);
         priv->items_priv_hist.num_of_items = 0;
+        priv->items_priv_peers.num_of_items = 0;
 	}
 #endif
 #ifdef UAP_SUPPORT
@@ -940,6 +1390,7 @@ woal_debug_entry(moal_private * priv)
 
 	priv->items_priv.priv = priv;
     priv->items_priv_hist.priv = priv;
+    priv->items_priv_peers.priv = priv;
 	handle_items = 9;
 #ifdef SDIO_MMC_DEBUG
 	handle_items += 2;
@@ -987,7 +1438,25 @@ woal_debug_entry(moal_private * priv)
     r2->gid = 1008; // wifi group
     mlan_hist_data_clear();
 
-	LEAVE();
+    r3 = create_proc_entry("peers", 0664, priv->proc_entry);
+    if (r3 == NULL) {
+        LEAVE();
+        return;
+    }
+    r3->data = &priv->items_priv_peers;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+    r3->owner = THIS_MODULE;
+#endif
+    r3->proc_fops = &peers_file_ops;
+    r3->uid = 0;
+    r3->gid = 1008; // wifi group
+
+    //Register the peer mgmt frame callback function.
+    mlan_register_peer_mac_cb((MOAL_PEER_MGMT_FRAME_CB) &woal_peer_mgmt_frame_callback);
+    woal_peer_list_size = 0;
+    sema_init(&woal_peer_sem,1);
+
+    LEAVE();
 }
 
 /**
@@ -1006,6 +1475,8 @@ woal_debug_remove(moal_private * priv)
 	/* Remove proc entry */
 	remove_proc_entry("debug", priv->proc_entry);
 	remove_proc_entry("histogram", priv->proc_entry);
+	woal_peer_delete_peer_list();
+	remove_proc_entry("peers", priv->proc_entry);
 
 	LEAVE();
 }

@@ -3773,6 +3773,8 @@ typedef MLAN_PACK_START struct _MrvlIEtypes_MacAddr_t {
 #define SUBTYPE_ASSOC_REQUEST        0
 /** ReAssoc Request */
 #define SUBTYPE_REASSOC_REQUEST      2
+/** Probe Req*/
+#define SUBTYPE_PROBE_REQ			4
 /** Probe Resp */
 #define SUBTYPE_PROBE_RESP			5
 /** Disassoc Request */

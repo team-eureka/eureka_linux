@@ -913,6 +913,7 @@ struct _moal_private {
     /** MLAN debug info */
 	struct debug_data_priv items_priv;
     struct debug_data_priv items_priv_hist;
+    struct debug_data_priv items_priv_peers;
 #endif
 
     /** tcp session queue */
