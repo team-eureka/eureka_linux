@@ -101,6 +101,16 @@ config BERLIN_SDIO_WLAN_8787
 	help
 	  This is the wifi module for Berlin. Please try build it for module only.
 
+config BERLIN_SDIO_WLAN_8801
+       tristate "SDIO Wlan (IEEE802.11 A|B|G|N) driver for wlan8801 module"
+       default n
+       depends on MMC_SDHCI_MV
+       select WIRELESS_EXT
+       select WEXT_PRIV
+       select WEXT_SPY
+       help
+        This is the wifi module for Berlin. Please try build it for module only.
+
 config BERLIN_FASTLOGO
 	tristate "Support fast logo"
 	default n
