@@ -95,6 +95,8 @@ HRESULT MV_CC_CBufSrv_Destroy(pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 	if ((pSrvInfo == NULL))
 		MV_CC_DBG_Error(E_INVALIDARG, "MV_CC_CBufSrv_Destroy", NULL);
 
+	singlenode_delete(cc_task->cbuf_head, pSrvInfo->m_ServiceID);
+
 	if (pSrvInfo->m_ServiceID == MV_CC_ServiceID_DynamicApply)
 		MV_CC_DBG_Error(E_BADVALUE, "MV_CC_CBufSrv_Destroy", NULL);
 
@@ -113,9 +115,6 @@ HRESULT MV_CC_CBufSrv_Destroy(pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 			MV_CC_DBG_Error(res, "MV_CC_CBufSrv_Destroy"
 				" MV_CC_DSS_Update", NULL);
 		}
-
-		singlenode_delete(cc_task->cbuf_head, pSrvInfo->m_ServiceID);
-
 		return S_OK;
 	}
 
@@ -131,9 +130,6 @@ HRESULT MV_CC_CBufSrv_Destroy(pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 		MV_CC_DBG_Error(res, "MV_CC_CBufSrv_Create"
 			" MV_CC_DSS_Reg", NULL);
 	}
-
-	singlenode_delete(cc_task->cbuf_head, pSrvInfo->m_ServiceID);
-
 	return S_OK;
 }
 

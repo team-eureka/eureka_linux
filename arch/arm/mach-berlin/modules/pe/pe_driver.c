@@ -138,6 +138,7 @@ static int pe_irqs[IRQ_PE_MAX];
 #define CEC_IOCTL_RX_MSG_BUF_MSG     0xbeef0008
 
 #define VDEC_IOCTL_ENABLE_INT   0xbeef1001
+#define VDEC_IOCTL_DISABLE_INT  0xbeef1002
 #define AOUT_IOCTL_START_CMD    0xbeef2001
 #define AIP_IOCTL_START_CMD     0xbeef2002
 #define AIP_IOCTL_STOP_CMD      0xbeef2003
@@ -2769,6 +2770,22 @@ static long pe_driver_ioctl_unlocked(struct file *filp, unsigned int cmd,
 		}
 #else
 		enable_irq(pe_irqs[IRQ_DHUBINTRVPRO]);
+#endif
+		break;
+
+	case VDEC_IOCTL_DISABLE_INT:
+		/* special handle for Vdec interrupt */
+#if CONFIG_VDEC_UNBLC_IRQ_FIX
+		if ((vdec_enable_int_cnt - vdec_int_cnt) > 0) {
+			disable_irq_nosync(pe_irqs[IRQ_DHUBINTRVPRO]);
+			vdec_int_cnt++;
+		}
+		if ((vdec_enable_int_cnt - vdec_int_cnt) != 0) {
+			pe_trace("enable_irq vdec, vdec_int_depth:%d, %d\n",
+				 vdec_int_cnt, vdec_enable_int_cnt);
+		}
+#else
+		disable_irq_nosync(pe_irqs[IRQ_DHUBINTRVPRO]);
 #endif
 		break;
 
