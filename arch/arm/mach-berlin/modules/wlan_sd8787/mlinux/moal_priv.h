@@ -2,7 +2,7 @@
  *
  * @brief This file contains definition for extended private IOCTL call.
  *
- * Copyright (C) 2008-2011, Marvell International Ltd.
+ * Copyright (C) 2008-2014, Marvell International Ltd.
  *
  * This software file (the "File") is distributed by Marvell International
  * Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -45,6 +45,19 @@ Change log:
 #define WOAL_SETNONE_GETNONE        (WOAL_IOCTL + 2)
 /** Private command ID for warm reset */
 #define WOAL_WARMRESET              1
+
+/**
+ * Linux Kernels later 3.9 use CONFIG_PM_RUNTIME instead of
+ * CONFIG_USB_SUSPEND
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#ifdef CONFIG_PM_RUNTIME
+#ifndef CONFIG_USB_SUSPEND
+#define CONFIG_USB_SUSPEND
+#endif
+#endif
+#endif
+
 /** Private command ID to clear 11d chan table */
 #define WOAL_11D_CLR_CHAN_TABLE     4
 
@@ -141,6 +154,8 @@ Change log:
 #define WOAL_AUTH_TYPE              18
 /** Private command ID to set/get port control */
 #define WOAL_PORT_CTRL              19
+/** Private command ID for coalesced status */
+#define WOAL_COALESCING_STATUS      20
 #if defined(WIFI_DIRECT_SUPPORT)
 #if defined(STA_SUPPORT) && defined(UAP_SUPPORT)
 /** Private command ID for set/get BSS role */
@@ -153,6 +168,8 @@ Change log:
 #define WOAL_MAC_CONTROL            24
 /** Private command ID to get thermal value */
 #define WOAL_THERMAL                25
+/** Private command ID to set/get hs cfg param */
+#define WOAL_CFG_HOTSPOT            26
 
 /** Private command ID to get log */
 #define WOALGETLOG                  (WOAL_IOCTL + 7)
@@ -168,11 +185,14 @@ Change log:
 #define WOAL_PASSPHRASE             1
 /** Private command to get/set Ad-Hoc AES */
 #define WOAL_ADHOC_AES              2
+#define WOAL_ASSOCIATE              3
 /** Private command ID to get WMM queue status */
 #define WOAL_WMM_QUEUE_STATUS       4
 /** Private command ID to get Traffic stream status */
 #define WOAL_WMM_TS_STATUS          5
 #define WOAL_IP_ADDRESS             7
+/** Private command ID to get PTK/GTK */
+#define WOAL_GET_KEY                9
 
 /** Get log buffer size */
 #define GETLOG_BUFSIZE              512
@@ -338,6 +358,11 @@ static const struct iw_priv_args woal_private_args[] = {
 	 IW_PRIV_TYPE_INT | 1,
 	 IW_PRIV_TYPE_INT | 1,
 	 "port_ctrl"},
+	{
+	 WOAL_COALESCING_STATUS,
+	 IW_PRIV_TYPE_INT | 1,
+	 IW_PRIV_TYPE_INT | 1,
+	 "coalesce_status"},
 #if defined(WIFI_DIRECT_SUPPORT)
 #if defined(STA_SUPPORT) && defined(UAP_SUPPORT)
 	{
@@ -362,6 +387,11 @@ static const struct iw_priv_args woal_private_args[] = {
 	 IW_PRIV_TYPE_INT | 1,
 	 IW_PRIV_TYPE_INT | 1,
 	 "thermal"},
+	{
+	 WOAL_CFG_HOTSPOT,
+	 IW_PRIV_TYPE_INT | 1,
+	 IW_PRIV_TYPE_INT | 1,
+	 "hotspotcfg"},
 	{
 	 WOAL_SET_GET_SIXTEEN_INT,
 	 IW_PRIV_TYPE_INT | 16,
@@ -544,6 +574,16 @@ static const struct iw_priv_args woal_private_args[] = {
 	 IW_PRIV_TYPE_CHAR | 256,
 	 IW_PRIV_TYPE_CHAR | 256,
 	 "adhocaes"},
+	{
+	 WOAL_GET_KEY,
+	 IW_PRIV_TYPE_CHAR | 256,
+	 IW_PRIV_TYPE_CHAR | 256,
+	 "getkey"},
+	{
+	 WOAL_ASSOCIATE,
+	 IW_PRIV_TYPE_CHAR | 256,
+	 IW_PRIV_TYPE_CHAR | 256,
+	 "associate"},
 	{
 	 WOAL_WMM_QUEUE_STATUS,
 	 IW_PRIV_TYPE_CHAR | 256,

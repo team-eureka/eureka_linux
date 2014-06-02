@@ -4,20 +4,25 @@
  *  it prepares command and sends it to firmware when
  *  it is ready.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
  *
  */
 
@@ -119,95 +124,109 @@ wlan_cmd_802_11_snmp_mib(IN pmlan_private pmpriv,
 	}
 
 	switch (cmd_oid) {
-	case DtimPeriod_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) DtimPeriod_i);
-		if (cmd_action == HostCmd_ACT_GEN_SET) {
-			psnmp_mib->query_type =
-				wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
-			psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u8));
-			ul_temp = *((t_u32 *) pdata_buf);
-			psnmp_mib->value[0] = (t_u8) ul_temp;
-			cmd->size += sizeof(t_u8);
-		}
-		break;
-	case FragThresh_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) FragThresh_i);
-		if (cmd_action == HostCmd_ACT_GEN_SET) {
-			psnmp_mib->query_type =
-				wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
-			psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
-			ul_temp = *((t_u32 *) pdata_buf);
-			*((t_u16 *) (psnmp_mib->value)) =
-				wlan_cpu_to_le16((t_u16) ul_temp);
-			cmd->size += sizeof(t_u16);
-		}
-		break;
-	case RtsThresh_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) RtsThresh_i);
-		if (cmd_action == HostCmd_ACT_GEN_SET) {
-			psnmp_mib->query_type =
-				wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
-			psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
-			ul_temp = *((t_u32 *) pdata_buf);
-			*(t_u16 *) (psnmp_mib->value) =
-				wlan_cpu_to_le16((t_u16) ul_temp);
-			cmd->size += sizeof(t_u16);
-		}
-		break;
+		case DtimPeriod_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) DtimPeriod_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u8));
+				ul_temp = *((t_u32 *) pdata_buf);
+				psnmp_mib->value[0] = (t_u8) ul_temp;
+				cmd->size += sizeof(t_u8);
+			}
+			break;
+		case FragThresh_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) FragThresh_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
+				ul_temp = *((t_u32 *) pdata_buf);
+				*((t_u16 *) (psnmp_mib->value)) =
+					wlan_cpu_to_le16((t_u16) ul_temp);
+				cmd->size += sizeof(t_u16);
+			}
+			break;
+		case RtsThresh_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) RtsThresh_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
+				ul_temp = *((t_u32 *) pdata_buf);
+				*(t_u16 *) (psnmp_mib->value) =
+					wlan_cpu_to_le16((t_u16) ul_temp);
+				cmd->size += sizeof(t_u16);
+			}
+			break;
 
-	case ShortRetryLim_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) ShortRetryLim_i);
-		if (cmd_action == HostCmd_ACT_GEN_SET) {
-			psnmp_mib->query_type =
-				wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
-			psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
-			ul_temp = (*(t_u32 *) pdata_buf);
-			*((t_u16 *) (psnmp_mib->value)) =
-				wlan_cpu_to_le16((t_u16) ul_temp);
-			cmd->size += sizeof(t_u16);
-		}
-		break;
-	case Dot11D_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) Dot11D_i);
-		if (cmd_action == HostCmd_ACT_GEN_SET) {
-			psnmp_mib->query_type =
-				wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
-			psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
-			ul_temp = *(t_u32 *) pdata_buf;
-			*((t_u16 *) (psnmp_mib->value)) =
-				wlan_cpu_to_le16((t_u16) ul_temp);
-			cmd->size += sizeof(t_u16);
-		}
-		break;
-	case Dot11H_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) Dot11H_i);
-		if (cmd_action == HostCmd_ACT_GEN_SET) {
-			psnmp_mib->query_type =
-				wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
-			psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
-			ul_temp = *(t_u32 *) pdata_buf;
-			*((t_u16 *) (psnmp_mib->value)) =
-				wlan_cpu_to_le16((t_u16) ul_temp);
-			cmd->size += sizeof(t_u16);
-		}
-		break;
-	case WwsMode_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) WwsMode_i);
-		if (cmd_action == HostCmd_ACT_GEN_SET) {
-			psnmp_mib->query_type =
-				wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
-			psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
-			ul_temp = *((t_u32 *) pdata_buf);
-			*((t_u16 *) (psnmp_mib->value)) =
-				wlan_cpu_to_le16((t_u16) ul_temp);
-			cmd->size += sizeof(t_u16);
-		}
-		break;
-	case Thermal_i:
-		psnmp_mib->oid = wlan_cpu_to_le16((t_u16) Thermal_i);
-		break;
-	default:
-		break;
+		case ShortRetryLim_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) ShortRetryLim_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
+				ul_temp = (*(t_u32 *) pdata_buf);
+				*((t_u16 *) (psnmp_mib->value)) =
+					wlan_cpu_to_le16((t_u16) ul_temp);
+				cmd->size += sizeof(t_u16);
+			}
+			break;
+		case Dot11D_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) Dot11D_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
+				ul_temp = *(t_u32 *) pdata_buf;
+				*((t_u16 *) (psnmp_mib->value)) =
+					wlan_cpu_to_le16((t_u16) ul_temp);
+				cmd->size += sizeof(t_u16);
+			}
+			break;
+		case Dot11H_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) Dot11H_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
+				ul_temp = *(t_u32 *) pdata_buf;
+				*((t_u16 *) (psnmp_mib->value)) =
+					wlan_cpu_to_le16((t_u16) ul_temp);
+				cmd->size += sizeof(t_u16);
+			}
+			break;
+		case WwsMode_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) WwsMode_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u16));
+				ul_temp = *((t_u32 *) pdata_buf);
+				*((t_u16 *) (psnmp_mib->value)) =
+					wlan_cpu_to_le16((t_u16) ul_temp);
+				cmd->size += sizeof(t_u16);
+			}
+			break;
+		case Thermal_i:
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) Thermal_i);
+			break;
+
+		case NullPktPeriod_i:
+			/** keep alive null data pkt interval in full power mode */
+			psnmp_mib->oid = wlan_cpu_to_le16((t_u16) NullPktPeriod_i);
+			if (cmd_action == HostCmd_ACT_GEN_SET) {
+				psnmp_mib->query_type =
+					wlan_cpu_to_le16(HostCmd_ACT_GEN_SET);
+				psnmp_mib->buf_size = wlan_cpu_to_le16(sizeof(t_u32));
+				ul_temp = *((t_u32 *) pdata_buf);
+				*((t_u32 *) (psnmp_mib->value)) =
+					wlan_cpu_to_le32((t_u32) ul_temp);
+				cmd->size += sizeof(t_u32);
+			}
+			break;
+		default:
+			break;
 	}
 	cmd->size = wlan_cpu_to_le16(cmd->size);
 	PRINTM(MINFO,
@@ -730,6 +749,9 @@ wlan_cmd_802_11_key_material(IN pmlan_private pmpriv,
 		else
 			pkey_material->key_param_set.key_info |=
 				KEY_INFO_UCAST_KEY;
+		if (pkey->key_flags & KEY_FLAG_AES_MCAST_IGTK)
+			pkey_material->key_param_set.key_info =
+				KEY_INFO_CMAC_AES_KEY;
 		pkey_material->key_param_set.key_info =
 			wlan_cpu_to_le16(pkey_material->key_param_set.key_info);
 		cmd->size =
@@ -857,7 +879,8 @@ wlan_cmd_802_11_key_material(IN pmlan_private pmpriv,
 	}
 	pkey_material->key_param_set.key_info =
 		wlan_cpu_to_le16(pkey_material->key_param_set.key_info);
-	if (pkey->key_len == WPA_AES_KEY_LEN) {
+	if (pkey->key_len == WPA_AES_KEY_LEN &&
+	    !(pkey->key_flags & KEY_FLAG_AES_MCAST_IGTK)) {
 		if (pkey->
 		    key_flags & (KEY_FLAG_RX_SEQ_VALID | KEY_FLAG_TX_SEQ_VALID))
 			memcpy(pmpriv->adapter,
@@ -878,6 +901,33 @@ wlan_cmd_802_11_key_material(IN pmlan_private pmpriv,
 					 sizeof(aes_param) +
 					 sizeof(pkey_material->action));
 		PRINTM(MCMND, "Set AES Key\n");
+		goto done;
+	}
+	if (pkey->key_len == WPA_IGTK_KEY_LEN &&
+	    (pkey->key_flags & KEY_FLAG_AES_MCAST_IGTK)) {
+		if (pkey->
+		    key_flags & (KEY_FLAG_RX_SEQ_VALID | KEY_FLAG_TX_SEQ_VALID))
+			memcpy(pmpriv->adapter,
+			       pkey_material->key_param_set.key_params.cmac_aes.
+			       ipn, pkey->pn, SEQ_MAX_SIZE);
+		pkey_material->key_param_set.key_info &= ~KEY_INFO_MCAST_KEY;
+		pkey_material->key_param_set.key_info |=
+			wlan_cpu_to_le16(KEY_INFO_AES_MCAST_IGTK);
+		pkey_material->key_param_set.key_type = KEY_TYPE_ID_AES_CMAC;
+		pkey_material->key_param_set.key_params.cmac_aes.key_len =
+			wlan_cpu_to_le16(pkey->key_len);
+		memcpy(pmpriv->adapter,
+		       pkey_material->key_param_set.key_params.cmac_aes.key,
+		       pkey->key_material, pkey->key_len);
+		pkey_material->key_param_set.length =
+			wlan_cpu_to_le16(KEY_PARAMS_FIXED_LEN +
+					 sizeof(cmac_aes_param));
+		cmd->size =
+			wlan_cpu_to_le16(sizeof(MrvlIEtypesHeader_t) +
+					 S_DS_GEN + KEY_PARAMS_FIXED_LEN +
+					 sizeof(cmac_aes_param) +
+					 sizeof(pkey_material->action));
+		PRINTM(MCMND, "Set CMAC AES Key\n");
 		goto done;
 	}
 	if (pkey->key_len == WPA_TKIP_KEY_LEN) {
@@ -935,26 +985,26 @@ wlan_cmd_802_11_supplicant_pmk(IN pmlan_private pmpriv,
 	ENTER();
 	/*
 	 * Parse the rest of the buf here
-	 *      1)  <ssid="valid ssid"> - This will get the passphrase, AKMP
-	 *          for specified ssid, if none specified then it will get all.
-	 *          Eg: iwpriv <mlanX> passphrase 0:ssid=marvell
-	 *      2)  <psk="psk">:<passphrase="passphare">:<bssid="00:50:43:ef:23:f3">
-	 *          <ssid="valid ssid"> - passphrase and psk cannot be provided to
-	 *          the same SSID, Takes one SSID at a time, If ssid= is present
-	 *          the it should contain a passphrase or psk. If no arguments are
-	 *          provided then AKMP=802.1x, and passphrase should be provided
-	 *          after association.
-	 *          End of each parameter should be followed by a ':'(except for the
-	 *          last parameter) as the delimiter. If ':' has to be used in
-	 *          an SSID then a '/' should be preceded to ':' as a escape.
-	 *          Eg:iwpriv <mlanX> passphrase
-	 *                    "1:ssid=mrvl AP:psk=abcdefgh:bssid=00:50:43:ef:23:f3"
-	 *          iwpriv <mlanX> passphrase
-	 *                 "1:ssid=mrvl/: AP:psk=abcdefgd:bssid=00:50:43:ef:23:f3"
-	 *          iwpriv <mlanX> passphrase "1:ssid=mrvlAP:psk=abcdefgd"
-	 *      3)  <ssid="valid ssid"> - This will clear the passphrase
-	 *          for specified ssid, if none specified then it will clear all.
-	 *          Eg: iwpriv <mlanX> passphrase 2:ssid=marvell
+	 *  1) <ssid="valid ssid"> - This will get the passphrase, AKMP
+	 *     for specified ssid, if none specified then it will get all.
+	 *     Eg: iwpriv <mlanX> passphrase 0:ssid=marvell
+	 *  2) <psk="psk">:<passphrase="passphare">:<bssid="00:50:43:ef:23:f3">
+	 *     <ssid="valid ssid"> - passphrase and psk cannot be provided to
+	 *     the same SSID, Takes one SSID at a time, If ssid= is present
+	 *     the it should contain a passphrase or psk. If no arguments are
+	 *     provided then AKMP=802.1x, and passphrase should be provided
+	 *     after association.
+	 *     End of each parameter should be followed by a ':'(except for the
+	 *     last parameter) as the delimiter. If ':' has to be used in
+	 *     an SSID then a '/' should be preceded to ':' as a escape.
+	 *     Eg:iwpriv <mlanX> passphrase
+	 *               "1:ssid=mrvl AP:psk=abcdefgh:bssid=00:50:43:ef:23:f3"
+	 *     iwpriv <mlanX> passphrase
+	 *            "1:ssid=mrvl/: AP:psk=abcdefgd:bssid=00:50:43:ef:23:f3"
+	 *     iwpriv <mlanX> passphrase "1:ssid=mrvlAP:psk=abcdefgd"
+	 *  3) <ssid="valid ssid"> - This will clear the passphrase
+	 *     for specified ssid, if none specified then it will clear all.
+	 *     Eg: iwpriv <mlanX> passphrase 2:ssid=marvell
 	 */
 
 	/* -1 is for t_u8 TlvBuffer[1] as this should not be included */
@@ -1467,6 +1517,8 @@ wlan_cmd_tdls_oper(IN pmlan_private pmpriv,
 	MrvlIEtypes_RsnParamSet_t *Rsn_ie = MNULL;
 	MrvlIETypes_qosinfo_t *qos_info = MNULL;
 	BSSDescriptor_t *pbss_desc = &pmpriv->curr_bss_params.bss_descriptor;
+	MrvlIEtypes_TDLS_Idle_Timeout_t *TdlsIdleTimeout = MNULL;
+
 	ENTER();
 
 	cmd->command = wlan_cpu_to_le16(HostCmd_CMD_TDLS_OPERATION);
@@ -1668,6 +1720,18 @@ wlan_cmd_tdls_oper(IN pmlan_private pmpriv,
 					sta_ptr->BSSCO_20_40.ieee_hdr.len +
 					sizeof(MrvlIEtypesHeader_t);
 			}
+			TdlsIdleTimeout =
+				(MrvlIEtypes_TDLS_Idle_Timeout_t *) (pos +
+								     travel_len);
+			TdlsIdleTimeout->header.type =
+				wlan_cpu_to_le16(TLV_TYPE_TDLS_IDLE_TIMEOUT);
+			TdlsIdleTimeout->header.len =
+				sizeof(TdlsIdleTimeout->value);
+			TdlsIdleTimeout->header.len =
+				wlan_cpu_to_le16(TdlsIdleTimeout->header.len);
+			TdlsIdleTimeout->value =
+				wlan_cpu_to_le16(TDLS_IDLE_TIMEOUT);
+			travel_len += sizeof(MrvlIEtypes_TDLS_Idle_Timeout_t);
 		}
 		break;
 	case WLAN_TDLS_DISABLE_LINK:
@@ -2266,6 +2330,7 @@ wlan_ops_sta_prepare_cmd(IN t_void * priv,
 	case HostCmd_CMD_BBP_REG_ACCESS:
 	case HostCmd_CMD_RF_REG_ACCESS:
 	case HostCmd_CMD_CAU_REG_ACCESS:
+	case HostCmd_CMD_TARGET_ACCESS:
 	case HostCmd_CMD_802_11_EEPROM_ACCESS:
 		ret = wlan_cmd_reg_access(cmd_ptr, cmd_action, pdata_buf);
 		break;
@@ -2340,8 +2405,8 @@ wlan_ops_sta_prepare_cmd(IN t_void * priv,
 /**
  *  @brief  This function issues commands to initialize firmware
  *
- *  @param priv     	A pointer to mlan_private structure
- *  @param first_bss	flag for first BSS
+ *  @param priv         A pointer to mlan_private structure
+ *  @param first_bss    flag for first BSS
  *
  *  @return		MLAN_STATUS_PENDING or MLAN_STATUS_FAILURE
  */

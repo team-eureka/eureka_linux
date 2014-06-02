@@ -2,20 +2,57 @@
  *
  *  @brief This file contains APIs to MOAL module.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
+ */
+
+/**
+ *  @mainpage MLAN Driver
+ *
+ *  @section overview_sec Overview
+ *
+ *  The MLAN is an OS independent WLAN driver for Marvell 802.11
+ *  embedded chipset.
+ *
+ *  @section copyright_sec Copyright
+ *
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
+ *
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell International Ltd
+ *  or its suppliers and licensors. The Material contains trade secrets and
+ *  proprietary and confidential information of Marvell or its suppliers and
+ *  licensors. The Material is protected by worldwide copyright and trade secret
+ *  laws and treaty provisions. No part of the Material may be used, copied,
+ *  reproduced, modified, published, uploaded, posted, transmitted, distributed,
+ *  or disclosed in any way without Marvell's prior express written permission.
+ *
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /********************************************************
@@ -275,6 +312,7 @@ mlan_register(IN pmlan_device pmdevice, OUT t_void ** ppmlan_adapter)
 		DFS_MASTER_RADAR_DETECT_EN;
 	pmadapter->init_para.dfs_slave_radar_det_en = DFS_SLAVE_RADAR_DETECT_EN;
 	pmadapter->init_para.fw_crc_check = pmdevice->fw_crc_check;
+	pmadapter->init_para.dev_cap_mask = pmdevice->dev_cap_mask;
 	pmadapter->rx_work_flag = pmdevice->rx_work;
 
 	pmadapter->priv_num = 0;
@@ -599,9 +637,9 @@ mlan_init_fw(IN t_void * pmlan_adapter)
  *
  *  @return     MLAN_STATUS_SUCCESS
  *                              The firmware shutdown call succeeded.
- *	            MLAN_STATUS_PENDING
+ *              MLAN_STATUS_PENDING
  *                              The firmware shutdown call is pending.
- *	            MLAN_STATUS_FAILURE
+ *              MLAN_STATUS_FAILURE
  *                              The firmware shutdown call failed.
  */
 mlan_status
@@ -756,15 +794,11 @@ mlan_main_process(IN t_void * pmlan_adapter)
 		pcb->moal_spin_unlock(pmadapter->pmoal_handle,
 				      pmadapter->pmain_proc_lock);
 		goto exit_main_proc;
-	} else {
+	} else
 		pmadapter->mlan_processing = MTRUE;
-		pcb->moal_spin_unlock(pmadapter->pmoal_handle,
-				      pmadapter->pmain_proc_lock);
-	}
+
 process_start:
 	do {
-		pcb->moal_spin_lock(pmadapter->pmoal_handle,
-				    pmadapter->pmain_proc_lock);
 		pmadapter->more_task_flag = MFALSE;
 		pcb->moal_spin_unlock(pmadapter->pmoal_handle,
 				      pmadapter->pmain_proc_lock);
@@ -778,6 +812,11 @@ process_start:
 		     pmadapter->callbacks.moal_spin_unlock) > HIGH_RX_PENDING) {
 			PRINTM(MEVENT, "Pause\n");
 			pmadapter->delay_task_flag = MTRUE;
+			if (!pmadapter->mlan_rx_processing)
+				wlan_recv_event(wlan_get_priv
+						(pmadapter, MLAN_BSS_ROLE_ANY),
+						MLAN_EVENT_ID_DRV_DEFER_RX_WORK,
+						MNULL);
 			break;
 		}
 		/* Handle pending SDIO interrupts if any */
@@ -803,6 +842,8 @@ process_start:
 		    )) {
 			wlan_pm_wakeup_card(pmadapter);
 			pmadapter->pm_wakeup_fw_try = MTRUE;
+			pcb->moal_spin_lock(pmadapter->pmoal_handle,
+					    pmadapter->pmain_proc_lock);
 			continue;
 		}
 		if (IS_CARD_RX_RCVD(pmadapter)) {
@@ -825,8 +866,7 @@ process_start:
 			    (pmadapter->tx_lock_flag == MTRUE))
 				break;
 
-			if (pmadapter->scan_processing
-			    || pmadapter->data_sent
+			if (pmadapter->data_sent
 			    || wlan_is_tdls_link_chan_switching(pmadapter->
 								tdls_status)
 			    || (wlan_bypass_tx_list_empty(pmadapter) &&
@@ -866,11 +906,9 @@ process_start:
 
 		/* Check if we need to confirm Sleep Request received
 		   previously */
-		if (pmadapter->ps_state == PS_STATE_PRE_SLEEP) {
-			if (!pmadapter->cmd_sent && !pmadapter->curr_cmd) {
+		if (pmadapter->ps_state == PS_STATE_PRE_SLEEP)
+			if (!pmadapter->cmd_sent && !pmadapter->curr_cmd)
 				wlan_check_ps_cond(pmadapter);
-			}
-		}
 
 		/*
 		 * The ps_state may have been changed during processing of
@@ -880,8 +918,11 @@ process_start:
 		    || (pmadapter->ps_state == PS_STATE_PRE_SLEEP)
 		    || (pmadapter->ps_state == PS_STATE_SLEEP_CFM)
 		    || (pmadapter->tx_lock_flag == MTRUE)
-			)
+			) {
+			pcb->moal_spin_lock(pmadapter->pmoal_handle,
+					    pmadapter->pmain_proc_lock);
 			continue;
+		}
 
 		if (!pmadapter->cmd_sent && !pmadapter->curr_cmd
 		    && wlan_is_send_cmd_allowed(pmadapter->tdls_status)
@@ -893,8 +934,7 @@ process_start:
 			}
 		}
 
-		if (!pmadapter->scan_processing
-		    && !pmadapter->data_sent &&
+		if (!pmadapter->data_sent &&
 		    !wlan_11h_radar_detected_tx_blocked(pmadapter) &&
 		    !wlan_is_tdls_link_chan_switching(pmadapter->tdls_status) &&
 		    !wlan_bypass_tx_list_empty(pmadapter)) {
@@ -909,8 +949,7 @@ process_start:
 			}
 		}
 
-		if (!pmadapter->scan_processing
-		    && !pmadapter->data_sent && !wlan_wmm_lists_empty(pmadapter)
+		if (!pmadapter->data_sent && !wlan_wmm_lists_empty(pmadapter)
 		    && !wlan_11h_radar_detected_tx_blocked(pmadapter)
 		    && !wlan_is_tdls_link_chan_switching(pmadapter->tdls_status)
 			) {
@@ -940,15 +979,15 @@ process_start:
 		}
 #endif
 
+		pcb->moal_spin_lock(pmadapter->pmoal_handle,
+				    pmadapter->pmain_proc_lock);
 	} while (MTRUE);
 
 	pcb->moal_spin_lock(pmadapter->pmoal_handle,
 			    pmadapter->pmain_proc_lock);
-	if (pmadapter->more_task_flag == MTRUE) {
-		pcb->moal_spin_unlock(pmadapter->pmoal_handle,
-				      pmadapter->pmain_proc_lock);
+	if (pmadapter->more_task_flag == MTRUE)
 		goto process_start;
-	}
+
 	pmadapter->mlan_processing = MFALSE;
 	pcb->moal_spin_unlock(pmadapter->pmoal_handle,
 			      pmadapter->pmain_proc_lock);
@@ -1109,5 +1148,20 @@ mlan_interrupt(IN t_void * adapter)
 		pmadapter->ps_state = PS_STATE_AWAKE;
 	}
 	wlan_interrupt(pmadapter);
+	LEAVE();
+}
+
+/**
+ *  @brief This function wakeup firmware.
+ *
+ *  @param adapter  A pointer to mlan_adapter structure
+ *  @return         N/A
+ */
+t_void
+mlan_pm_wakeup_card(IN t_void * adapter)
+{
+	mlan_adapter *pmadapter = (mlan_adapter *) adapter;
+	ENTER();
+	wlan_pm_wakeup_card(pmadapter);
 	LEAVE();
 }

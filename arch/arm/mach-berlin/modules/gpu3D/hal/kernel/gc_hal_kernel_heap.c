@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 
 
 
-
 /**
 **  @file
 **  gckHEAP object for kernel HAL layer.  The heap implemented here is an arena-
@@ -35,8 +34,7 @@
 /*******************************************************************************
 ***** Structures ***************************************************************
 *******************************************************************************/
-
-#define gcdIN_USE               ((gcskNODE_PTR) ~0)
+#define gcdIN_USE               ((gcskNODE_PTR)gcvMAXUINTPTR_T)
 
 typedef struct _gcskNODE *      gcskNODE_PTR;
 typedef struct _gcskNODE
@@ -496,11 +494,7 @@ gckHEAP_Allocate(
     if (bytes > Heap->allocationSize - gcmSIZEOF(gcskHEAP) - gcmSIZEOF(gcskNODE))
     {
         /* Adjust allocation size. */
-//####modified for marvell-bg2
-        //Heap->allocationSize = bytes * 2;
-        while (bytes > Heap->allocationSize - gcmSIZEOF(gcskHEAP) - gcmSIZEOF(gcskNODE))
-            Heap->allocationSize *= 2;
-//####end for marvell-bg2
+        Heap->allocationSize = bytes * 2;
     }
 
     else if (Heap->heap != gcvNULL)

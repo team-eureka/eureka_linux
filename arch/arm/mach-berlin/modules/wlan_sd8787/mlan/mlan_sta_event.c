@@ -2,20 +2,26 @@
  *
  *  @brief This file contains MLAN event handling.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /********************************************************
@@ -295,7 +301,7 @@ wlan_parse_tdls_event(pmlan_private priv, pmlan_buffer pevent)
  *
  *  @param priv    A pointer to mlan_private
  *
- *  @return		   N/A
+ *  @return        N/A
  */
 void
 wlan_send_tdls_tear_down_request(pmlan_private priv)
@@ -400,6 +406,8 @@ wlan_reset_connect_state(pmlan_private priv, t_u8 drv_disconnect)
 	priv->wps.session_enable = MFALSE;
 	memset(priv->adapter, (t_u8 *) & priv->wps.wps_ie, 0x00,
 	       sizeof(priv->wps.wps_ie));
+	priv->sec_info.osen_enabled = MFALSE;
+	priv->osen_ie_len = 0;
 
 	priv->sec_info.encryption_mode = MLAN_ENCRYPTION_MODE_NONE;
 
@@ -495,11 +503,10 @@ wlan_2040_coex_event(pmlan_private pmpriv)
 /**
  *  @brief This function will process tx pause event
  *
- *
  *  @param priv    A pointer to mlan_private
  *  @param pevent  A pointer to event buf
  *
- *  @return	       N/A
+ *  @return        N/A
  */
 static void
 wlan_process_sta_tx_pause_event(pmlan_private priv, pmlan_buffer pevent)
@@ -512,8 +519,10 @@ wlan_process_sta_tx_pause_event(pmlan_private priv, pmlan_buffer pevent)
 	MrvlIEtypes_tx_pause_t *tx_pause_tlv;
 	sta_node *sta_ptr = MNULL;
 	tdlsStatus_e status;
+	t_u8 *bssid = MNULL;
 	ENTER();
-
+	if (priv->media_connected)
+		bssid = priv->curr_bss_params.bss_descriptor.mac_address;
 	while (tlv_buf_left >= (int)sizeof(MrvlIEtypesHeader_t)) {
 		tlv_type = wlan_le16_to_cpu(tlv->type);
 		tlv_len = wlan_le16_to_cpu(tlv->len);
@@ -525,28 +534,38 @@ wlan_process_sta_tx_pause_event(pmlan_private priv, pmlan_buffer pevent)
 		}
 		if (tlv_type == TLV_TYPE_TX_PAUSE) {
 			tx_pause_tlv = (MrvlIEtypes_tx_pause_t *) tlv;
-			PRINTM(MCMND,
-			       "TDLS TxPause: " MACSTR " pause=%d, pkts=%d\n",
+			PRINTM(MCMND, "TxPause: " MACSTR " pause=%d, pkts=%d\n",
 			       MAC2STR(tx_pause_tlv->peermac),
 			       tx_pause_tlv->tx_pause, tx_pause_tlv->pkt_cnt);
-			status = wlan_get_tdls_link_status(priv,
-							   tx_pause_tlv->
-							   peermac);
-			if (MTRUE == wlan_is_tdls_link_setup(status)) {
-				sta_ptr =
-					wlan_get_station_entry(priv,
-							       tx_pause_tlv->
-							       peermac);
-				if (sta_ptr) {
-					if (sta_ptr->tx_pause !=
-					    tx_pause_tlv->tx_pause) {
-						sta_ptr->tx_pause =
-							tx_pause_tlv->tx_pause;
-						wlan_update_ralist_tx_pause
-							(priv,
-							 tx_pause_tlv->peermac,
-							 tx_pause_tlv->
-							 tx_pause);
+			if (bssid &&
+			    !memcmp(priv->adapter, bssid, tx_pause_tlv->peermac,
+				    MLAN_MAC_ADDR_LENGTH)) {
+				if (tx_pause_tlv->tx_pause)
+					priv->port_open = MFALSE;
+				else
+					priv->port_open = MTRUE;
+			} else {
+				status = wlan_get_tdls_link_status(priv,
+								   tx_pause_tlv->
+								   peermac);
+				if (MTRUE == wlan_is_tdls_link_setup(status)) {
+					sta_ptr =
+						wlan_get_station_entry(priv,
+								       tx_pause_tlv->
+								       peermac);
+					if (sta_ptr) {
+						if (sta_ptr->tx_pause !=
+						    tx_pause_tlv->tx_pause) {
+							sta_ptr->tx_pause =
+								tx_pause_tlv->
+								tx_pause;
+							wlan_update_ralist_tx_pause
+								(priv,
+								 tx_pause_tlv->
+								 peermac,
+								 tx_pause_tlv->
+								 tx_pause);
+						}
 					}
 				}
 			}
@@ -1053,8 +1072,9 @@ wlan_ops_sta_process_event(IN t_void * priv)
 			pcb->moal_mfree(pmadapter->pmoal_handle, evt_buf);
 		}
 		break;
+
 	case EVENT_TX_DATA_PAUSE:
-		PRINTM(MEVENT, "EVENT: TDLS TX_DATA_PAUSE\n");
+		PRINTM(MEVENT, "EVENT: TX_DATA_PAUSE\n");
 		wlan_process_sta_tx_pause_event(priv, pmbuf);
 		break;
 
@@ -1070,6 +1090,17 @@ wlan_ops_sta_process_event(IN t_void * priv)
 		}
 		break;
 
+	case EVENT_TX_STATUS_REPORT:
+		PRINTM(MINFO, "EVENT: TX_STATUS\n");
+		pevent->bss_index = pmpriv->bss_index;
+		pevent->event_id = MLAN_EVENT_ID_FW_TX_STATUS;
+		pevent->event_len = pmbuf->data_len;
+		memcpy(pmadapter, (t_u8 *) pevent->event_buf,
+		       pmbuf->pbuf + pmbuf->data_offset, MIN(pevent->event_len,
+							     sizeof
+							     (event_buf)));
+		wlan_recv_event(pmpriv, pevent->event_id, pevent);
+		break;
 	default:
 		PRINTM(MEVENT, "EVENT: unknown event id: %#x\n", eventcause);
 		wlan_recv_event(pmpriv, MLAN_EVENT_ID_FW_UNKNOWN, MNULL);

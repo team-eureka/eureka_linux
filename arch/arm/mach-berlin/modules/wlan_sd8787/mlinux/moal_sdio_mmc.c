@@ -3,7 +3,7 @@
  *  @brief This file contains SDIO MMC IF (interface) module
  *  related functions.
  *
- * Copyright (C) 2008-2011, Marvell International Ltd.
+ * Copyright (C) 2008-2014, Marvell International Ltd.
  *
  * This software file (the "File") is distributed by Marvell International
  * Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -564,16 +564,19 @@ woal_write_data_sync(moal_handle * handle, mlan_buffer * pmbuf, t_u32 port,
 		 BLOCK_MODE) ? (pmbuf->data_len /
 				MLAN_SDIO_BLOCK_SIZE) : pmbuf->data_len;
 	t_u32 ioport = (port & MLAN_SDIO_IO_PORT_MASK);
+	int status = 0;
 #ifdef SDIO_MMC_DEBUG
 	handle->cmd53w = 1;
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 	sdio_claim_host(((struct sdio_mmc_card *)handle->card)->func);
 #endif
-	if (!sdio_writesb
-	    (((struct sdio_mmc_card *)handle->card)->func, ioport, buffer,
-	     blkcnt * blksz))
+	status = sdio_writesb(((struct sdio_mmc_card *)handle->card)->func,
+			      ioport, buffer, blkcnt * blksz);
+	if (!status)
 		ret = MLAN_STATUS_SUCCESS;
+	else
+		PRINTM(MERROR, "cmd53 write error=%d\n", status);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32)
 	sdio_release_host(((struct sdio_mmc_card *)handle->card)->func);
 #endif
@@ -631,7 +634,7 @@ woal_read_data_sync(moal_handle * handle, mlan_buffer * pmbuf, t_u32 port,
 /**
  *  @brief This function registers the IF module in bus driver
  *
- *  @return	   MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
+ *  @return    MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
  */
 mlan_status
 woal_bus_register(void)

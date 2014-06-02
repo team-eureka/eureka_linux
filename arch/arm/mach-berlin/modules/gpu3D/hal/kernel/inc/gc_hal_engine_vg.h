@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,9 +17,6 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
-
-
-
 
 
 
@@ -528,14 +525,14 @@ gcoHAL_CombineAddress(
 gceSTATUS
 gcoHAL_ScheduleVideoMemory(
     IN gcoHAL Hal,
-    IN gcuVIDMEM_NODE_PTR Node
+    IN gctUINT32 Node
     );
 
 /* Free linear video memory allocated with gcoHAL_AllocateLinearVideoMemory. */
 gceSTATUS
 gcoHAL_FreeVideoMemory(
     IN gcoHAL Hal,
-    IN gcuVIDMEM_NODE_PTR Node
+    IN gctUINT32 Node
     );
 
 /* Query command buffer attributes. */
@@ -551,7 +548,7 @@ gcoHAL_AllocateLinearVideoMemory(
     IN gctUINT Size,
     IN gctUINT Alignment,
     IN gcePOOL Pool,
-    OUT gcuVIDMEM_NODE_PTR * Node,
+    OUT gctUINT32 * Node,
     OUT gctUINT32 * Address,
     OUT gctPOINTER * Memory
     );
@@ -570,7 +567,7 @@ gcoHAL_ReserveTask(
     IN gcoHAL Hal,
     IN gceBLOCK Block,
     IN gctUINT TaskCount,
-    IN gctSIZE_T Bytes,
+    IN gctUINT32 Bytes,
     OUT gctPOINTER * Memory
     );
 /******************************************************************************\
@@ -746,6 +743,8 @@ gcoVG_SetColorRamp(
 gceSTATUS
 gcoVG_SetPattern(
     IN gcoVG Vg,
+    IN gctINT32 width,
+    IN gctINT32 height,
     IN gcoSURF Pattern,
     IN gceTILE_MODE TileMode,
     IN gceIMAGE_FILTER Filter
@@ -796,6 +795,9 @@ gcoVG_DrawPath(
     IN gcsPATH_DATA_PTR PathData,
     IN gctFLOAT Scale,
     IN gctFLOAT Bias,
+#if gcdMOVG
+    IN gctFLOAT *Bounds,
+#endif
     IN gctBOOL SoftwareTesselation
     );
 
@@ -812,7 +814,8 @@ gcoVG_DrawImage(
     IN gctINT TargetY,
     IN gctINT Width,
     IN gctINT Height,
-    IN gctBOOL Mask
+    IN gctBOOL Mask,
+    IN gctBOOL isDrawImage
     );
 
 gceSTATUS
@@ -822,7 +825,12 @@ gcoVG_TesselateImage(
     IN gcsVG_RECT_PTR Rectangle,
     IN gceIMAGE_FILTER Filter,
     IN gctBOOL Mask,
+#if gcdMOVG
+    IN gctBOOL SoftwareTesselation,
+    IN gceVG_BLEND BlendMode
+#else
     IN gctBOOL SoftwareTesselation
+#endif
     );
 
 gceSTATUS

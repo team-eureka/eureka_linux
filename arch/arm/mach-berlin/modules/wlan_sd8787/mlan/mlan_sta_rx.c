@@ -3,20 +3,26 @@
  *  @brief This file contains the handling of RX in MLAN
  *  module.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /********************************************************
@@ -71,6 +77,58 @@ typedef struct {
 	t_u16 ethertype;
 
 } EthII_Hdr_t;
+
+/** IPv4 ARP request header */
+typedef MLAN_PACK_START struct {
+    /** Hardware type */
+	t_u16 Htype;
+    /** Protocol type */
+	t_u16 Ptype;
+    /** Hardware address length */
+	t_u8 addr_len;
+    /** Protocol address length */
+	t_u8 proto_len;
+    /** Operation code */
+	t_u16 op_code;
+    /** Source mac address */
+	t_u8 src_mac[MLAN_MAC_ADDR_LENGTH];
+    /** Sender IP address */
+	t_u8 src_ip[4];
+    /** Destination mac address */
+	t_u8 dst_mac[MLAN_MAC_ADDR_LENGTH];
+    /** Destination IP address */
+	t_u8 dst_ip[4];
+} MLAN_PACK_END IPv4_ARP_t;
+
+/** IPv6 Nadv packet header */
+typedef MLAN_PACK_START struct {
+    /** IP protocol version */
+	t_u8 version;
+    /** flow label */
+	t_u8 flow_lab[3];
+    /** Payload length */
+	t_u16 payload_len;
+    /** Next header type */
+	t_u8 next_hdr;
+    /** Hot limit */
+	t_u8 hop_limit;
+    /** Source address */
+	t_u8 src_addr[16];
+    /** Destination address */
+	t_u8 dst_addr[16];
+    /** ICMP type */
+	t_u8 icmp_type;
+    /** IPv6 Code */
+	t_u8 ipv6_code;
+    /** IPv6 Checksum */
+	t_u16 ipv6_checksum;
+    /** Flags */
+	t_u32 flags;
+    /** Target address */
+	t_u8 taget_addr[16];
+    /** Reserved */
+	t_u8 rev[8];
+} MLAN_PACK_END IPv6_Nadv_t;
 
 /********************************************************
 		Global Variables
@@ -162,6 +220,53 @@ static void mlan_hist_data_set(t_s8 rxRate, t_s8 snr, t_s8 nflr)
 /********************************************************
 		Global functions
 ********************************************************/
+/**
+ *  @brief This function check and discard IPv4 and IPv6 gratuitous broadcast packets
+ *
+ *  @param prx_pkt     A pointer to RxPacketHdr_t structure of received packet
+ *  @param pmadapter   A pointer to pmlan_adapter structure
+ *  @return            TRUE if found such type of packets, FALSE not found
+ */
+static t_u8
+discard_gratuitous_ARP_msg(RxPacketHdr_t * prx_pkt, pmlan_adapter pmadapter)
+{
+	t_u8 proto_ARP_type[] = { 0x08, 0x06 };
+	t_u8 proto_ARP_type_v6[] = { 0x86, 0xDD };
+	IPv4_ARP_t *parp_hdr;
+	IPv6_Nadv_t *pNadv_hdr;
+	t_u8 ret = MFALSE;
+
+	/* IPV4 pkt check * A gratuitous ARP is an ARP packet * where the
+	   source and destination IP are both set to * the IP of the machine
+	   issuing the packet. */
+	if (memcmp
+	    (pmadapter, proto_ARP_type, &prx_pkt->eth803_hdr.h803_len,
+	     sizeof(proto_ARP_type)) == 0) {
+		parp_hdr = (IPv4_ARP_t *) (&prx_pkt->rfc1042_hdr);
+		/* Graguitous ARP can be ARP request or ARP reply */
+		if ((parp_hdr->op_code == mlan_htons(0x01)) ||
+		    (parp_hdr->op_code == mlan_htons(0x02)))
+			if (memcmp
+			    (pmadapter, parp_hdr->src_ip, parp_hdr->dst_ip,
+			     4) == 0)
+				ret = MTRUE;
+	}
+
+	/* IPV6 pkt check * An unsolicited Neighbor Advertisement pkt is *
+	   marked by a cleared Solicited Flag */
+	if (memcmp
+	    (pmadapter, proto_ARP_type_v6, &prx_pkt->eth803_hdr.h803_len,
+	     sizeof(proto_ARP_type_v6)) == 0) {
+		pNadv_hdr = (IPv6_Nadv_t *) (&prx_pkt->rfc1042_hdr);
+		/* Check Nadv type: next header is ICMPv6 and icmp type is Nadv
+		 */
+		if (pNadv_hdr->next_hdr == 0x3A && pNadv_hdr->icmp_type == 0x88)
+			if ((pNadv_hdr->flags & mlan_htonl(0x40000000)) == 0)
+				ret = MTRUE;
+	}
+
+	return ret;
+}
 
 /**
  *  @brief This function process tdls action frame
@@ -319,10 +424,12 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	RxPD *prx_pd;
 	int hdr_chop;
 	EthII_Hdr_t *peth_hdr;
-	t_u8 rfc1042_eth_hdr[MLAN_MAC_ADDR_LENGTH] =
-		{ 0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00 };
-	t_u8 snap_oui_802_h[MLAN_MAC_ADDR_LENGTH] =
-		{ 0xaa, 0xaa, 0x03, 0x00, 0x00, 0xf8 };
+	t_u8 rfc1042_eth_hdr[MLAN_MAC_ADDR_LENGTH] = {
+		0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00
+	};
+	t_u8 snap_oui_802_h[MLAN_MAC_ADDR_LENGTH] = {
+		0xaa, 0xaa, 0x03, 0x00, 0x00, 0xf8
+	};
 	t_u8 appletalk_aarp_type[2] = { 0x80, 0xf3 };
 	t_u8 ipx_snap_type[2] = { 0x81, 0x37 };
 	t_u8 tdls_action_type[2] = { 0x89, 0x0d };
@@ -370,12 +477,12 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	     memcmp(pmadapter, &prx_pkt->rfc1042_hdr.snap_type,
 		    ipx_snap_type, sizeof(ipx_snap_type)))) {
 		/*
-		 *  Replace the 803 header and rfc1042 header (llc/snap) with an
-		 *    EthernetII header, keep the src/dst and snap_type (ethertype).
-		 *  The firmware only passes up SNAP frames converting
-		 *    all RX Data from 802.11 to 802.2/LLC/SNAP frames.
-		 *  To create the Ethernet II, just move the src, dst address right
-		 *    before the snap_type.
+		 * Replace the 803 header and rfc1042 header (llc/snap) with an
+		 * EthernetII header, keep the src/dst and snap_type (ethertype).
+		 * The firmware only passes up SNAP frames converting
+		 * all RX Data from 802.11 to 802.2/LLC/SNAP frames.
+		 * To create the Ethernet II, just move the src, dst address
+		 * right before the snap_type.
 		 */
 		peth_hdr = (EthII_Hdr_t *)
 			((t_u8 *) & prx_pkt->eth803_hdr
@@ -399,9 +506,15 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 		HEXDUMP("RX Data: LLC/SNAP",
 			(t_u8 *) & prx_pkt->rfc1042_hdr,
 			sizeof(prx_pkt->rfc1042_hdr));
-		if (!memcmp
-		    (pmadapter, &prx_pkt->eth803_hdr.h803_len, tdls_action_type,
-		     sizeof(tdls_action_type))) {
+		if ((priv->hotspot_cfg & HOTSPOT_ENABLED) &&
+		    discard_gratuitous_ARP_msg(prx_pkt, pmadapter)) {
+			ret = MLAN_STATUS_SUCCESS;
+			PRINTM(MDATA,
+			       "Bypass sending Gratuitous ARP frame to Kernel.\n");
+			goto done;
+		}
+		if (!memcmp(pmadapter, &prx_pkt->eth803_hdr.h803_len,
+			    tdls_action_type, sizeof(tdls_action_type))) {
 			wlan_process_tdls_action_frame(priv,
 						       ((t_u8 *) prx_pd +
 							prx_pd->rx_pkt_offset),

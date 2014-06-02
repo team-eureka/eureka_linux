@@ -36,7 +36,7 @@
 	memory {
 		name = "memory";
 		device_type = "memory";
-		linux,usable-memory = <0x00600000 0x13200000>;
+		linux,usable-memory = <0x00600000 0x12E00000>;
 	};
 
 	chosen {
@@ -346,7 +346,7 @@
 
 		shm@29000000 {
 			compatible = "mrvl,berlin-shm";
-			reg = <0x13800000 0x0C000000>, <0x1F800000 0x00800000>;
+			reg = <0x13400000 0x0C400000>, <0x1F800000 0x00800000>;
 		};
 
 		pmic{

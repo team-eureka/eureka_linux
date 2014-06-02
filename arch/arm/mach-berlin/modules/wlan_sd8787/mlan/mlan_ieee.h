@@ -3,20 +3,26 @@
  *  @brief This file contains IEEE information element related
  *  definitions used in MLAN and MOAL module.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /******************************************************
@@ -159,8 +165,8 @@ typedef MLAN_PACK_START struct _TLV_Generic_t {
 } MLAN_PACK_END TLV_Generic_t, *pTLV_Generic_t;
 
 /** Capability information mask */
-#define CAPINFO_MASK    (~(MBIT(15) | MBIT(14) |            \
-							MBIT(12) | MBIT(11) | MBIT(9)))
+#define CAPINFO_MASK \
+(~(MBIT(15) | MBIT(14) | MBIT(12) | MBIT(11) | MBIT(9)))
 
 /** Capability Bit Map*/
 #ifdef BIG_ENDIAN_SUPPORT
@@ -323,9 +329,21 @@ typedef t_u8 WLAN_802_11_RATES[WLAN_SUPPORTED_RATES];
 /** AKM: 8021x */
 #define RSN_AKM_8021X		1
 /** AKM: PSK */
-#define RSN_AKM_PSK     	2
+#define RSN_AKM_PSK         2
 /** AKM: PSK SHA256 */
 #define RSN_AKM_PSK_SHA256	6
+#if defined(STA_SUPPORT)
+/** Pairwise Cipher Suite length */
+#define PAIRWISE_CIPHER_SUITE_LEN    4
+/** AKM Suite length */
+#define AKM_SUITE_LEN    4
+/** MFPC bit in RSN capability */
+#define MFPC_BIT    7
+/** MFPR bit in RSN capability */
+#define MFPR_BIT    6
+/** PMF ORing mask */
+#define PMF_MASK    0x00c0
+#endif
 
 /** wpa_suite_t */
 typedef MLAN_PACK_START struct _wpa_suite_t {
@@ -976,7 +994,8 @@ typedef MLAN_PACK_START struct {
 	t_u8 element_id;    /**< IEEE Element ID = 32 */
 	t_u8 len;	    /**< Element length after id and len */
 	t_u8 local_constraint;
-			    /**< Local power constraint applied to 11d chan info */
+			    /**< Local power constraint applied to 11d
+                             chan info */
 } MLAN_PACK_END IEEEtypes_PowerConstraint_t;
 
 /**  IEEE Power Capability element (7.3.2.16) */
@@ -1140,7 +1159,7 @@ typedef struct {
 } wlan_11h_bss_info_t;
 
 /** Ethernet packet type for TDLS */
-#define MLAN_ETHER_PKT_TYPE_TDLS_ACTION	(0x890D)
+#define MLAN_ETHER_PKT_TYPE_TDLS_ACTION (0x890D)
 
 /*802.11z  TDLS action frame type and strcuct */
 typedef MLAN_PACK_START struct {
@@ -1226,6 +1245,24 @@ typedef MLAN_PACK_START struct _wlan_user_scan_chan {
 	t_u32 scan_time;
 } MLAN_PACK_END wlan_user_scan_chan;
 
+/** channel statictics */
+typedef MLAN_PACK_START struct _ChanStatistics_t {
+    /** channle number */
+	t_u8 chan_num;
+	/** band info */
+	t_u8 bandconfig;
+	/** flags */
+	t_u8 flags;
+	/** noise */
+	t_s8 noise;
+	/** total network */
+	t_u16 total_networks;
+	/** scan duration */
+	t_u16 cca_scan_duration;
+	/** busy duration */
+	t_u16 cca_busy_duration;
+} MLAN_PACK_END ChanStatistics_t;
+
 /**
  *  Input structure to configure an immediate scan cmd to firmware
  *
@@ -1272,6 +1309,8 @@ typedef MLAN_PACK_START struct {
      *  Variable number (fixed maximum) of channels to scan up
      */
 	wlan_user_scan_chan chan_list[WLAN_USER_SCAN_CHAN_MAX];
+    /** scan channel gap */
+	t_u16 scan_chan_gap;
 } MLAN_PACK_END wlan_user_scan_cfg;
 
 /** Default scan interval in millisecond*/
@@ -1291,6 +1330,8 @@ typedef MLAN_PACK_START struct {
 #define BG_SCAN_SSID_MATCH			0x0001
 /** ssid match and RSSI exceeded */
 #define BG_SCAN_SSID_RSSI_MATCH		0x0004
+/**wait for all channel scan to complete to report scan result*/
+#define BG_SCAN_WAIT_ALL_CHAN_DONE  0x80000000
 /** Maximum number of channels that can be sent in bg scan config */
 #define WLAN_BG_SCAN_CHAN_MAX       38
 
@@ -1331,6 +1372,8 @@ typedef MLAN_PACK_START struct {
 	wlan_user_scan_ssid ssid_list[MRVDRV_MAX_SSID_LIST_LENGTH];
     /** Variable number (fixed maximum) of channels to scan up */
 	wlan_user_scan_chan chan_list[WLAN_BG_SCAN_CHAN_MAX];
+    /** scan channel gap */
+	t_u16 scan_chan_gap;
 } MLAN_PACK_END wlan_bgscan_cfg;
 #endif /* STA_SUPPORT */
 
@@ -1452,6 +1495,10 @@ typedef struct _BSSDescriptor_t {
     /** WAPI IE offset in the beacon buffer */
 	t_u16 wapi_offset;
 #endif
+	/* Hotspot 2.0 OSEN AKM IE */
+	IEEEtypes_Generic_t *posen_ie;
+    /** osen IE offset in the beacon buffer */
+	t_u16 osen_offset;
 
     /** Pointer to the returned scan response */
 	t_u8 *pbeacon_buf;
