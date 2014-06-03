@@ -116,7 +116,11 @@ static ulong registerMemSizeVG = 2 << 10;
 module_param(registerMemSizeVG, ulong, 0644);
 
 /*####modified for marvell-bg2*/
+#if USE_GALOIS_SHM
 static ulong contiguousSize = 512;
+#else
+static ulong contiguousSize = 4 << 20;
+#endif
 /*####end for marvell-bg2*/
 module_param(contiguousSize, ulong, 0644);
 
