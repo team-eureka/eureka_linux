@@ -1163,6 +1163,8 @@ typedef struct _mlan_private {
 #ifdef STA_SUPPORT
 	ExtCap_t ext_cap;
 #endif
+    /** Control TX AMPDU on infra link */
+	t_u8 txaggrctrl;
 } mlan_private, *pmlan_private;
 
 /** BA stream status */
@@ -1511,7 +1513,7 @@ typedef struct _sdio_mpa_tx {
 	t_u32 buf_size;
 	/** multiport tx aggregation pkt aggr limit */
 	t_u32 pkt_aggr_limit;
-    /** multiport write info */
+	/** multiport write info */
 	t_u16 mp_wr_info[SDIO_MP_AGGR_DEF_PKT_LIMIT];
 } sdio_mpa_tx;
 #endif
@@ -2719,6 +2721,7 @@ t_void wlan_update_non_tdls_ralist(mlan_private * priv, t_u8 * mac,
 				   t_u8 tx_pause);
 mlan_status wlan_misc_ioctl_tdls_config(IN pmlan_adapter pmadapter,
 					IN pmlan_ioctl_req pioctl_req);
+void wlan_11n_send_delba_to_peer(mlan_private * priv, t_u8 * ra);
 mlan_status wlan_misc_ioctl_tdls_oper(IN pmlan_adapter pmadapter,
 				      IN pmlan_ioctl_req pioctl_req);
 

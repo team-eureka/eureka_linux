@@ -33,7 +33,7 @@ Change log:
 #define _MLAN_DECL_H_
 
 /** MLAN release version */
-#define MLAN_RELEASE_VERSION		"481"
+#define MLAN_RELEASE_VERSION		"481.P2"
 
 /** Re-define generic data types for MLAN/MOAL */
 /** Signed char (1-byte) */

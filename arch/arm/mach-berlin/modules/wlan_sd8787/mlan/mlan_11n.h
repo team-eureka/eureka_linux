@@ -267,6 +267,8 @@ wlan_is_ampdu_allowed(mlan_private * priv, raListTbl * ptr, int tid)
 		return MFALSE;
 	if (ptr->is_tdls_link)
 		return is_station_ampdu_allowed(priv, ptr, tid);
+	if (priv->adapter->tdls_status != TDLS_NOT_SETUP && !priv->txaggrctrl)
+		return MFALSE;
 
 	return (priv->aggr_prio_tbl[tid].ampdu_ap != BA_STREAM_NOT_ALLOWED)
 		? MTRUE : MFALSE;

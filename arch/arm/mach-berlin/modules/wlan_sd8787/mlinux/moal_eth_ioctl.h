@@ -191,6 +191,7 @@ Change log:
 #ifdef WIFI_DIRECT_SUPPORT
 #define PRIV_CMD_MIRACAST_CFG       "miracastcfg"
 #endif
+#define PRIV_CMD_TX_AGGR_CTRL "txaggrctrl"
 
 /** Private command ID for Android default commands */
 #define WOAL_ANDROID_DEF_CMD        (SIOCDEVPRIVATE + 1)
