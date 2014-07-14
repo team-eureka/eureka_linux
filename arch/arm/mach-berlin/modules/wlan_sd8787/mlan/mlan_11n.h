@@ -5,20 +5,25 @@
  *  Driver interface functions and type declarations for the 11n module
  *    implemented in mlan_11n.c.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
  *
  */
 
@@ -105,6 +110,8 @@ void wlan_11n_delete_bastream(mlan_private * priv, t_u8 * del_ba);
 int wlan_get_rxreorder_tbl(mlan_private * priv, rx_reorder_tbl * buf);
 /** get tx ba stream table */
 int wlan_get_txbastream_tbl(mlan_private * priv, tx_ba_stream_tbl * buf);
+/** send delba */
+void wlan_11n_delba(mlan_private * priv, int tid);
 /** Minimum number of AMSDU */
 #define MIN_NUM_AMSDU 2
 /** AMSDU Aggr control cmd resp */
@@ -130,7 +137,7 @@ void wlan_11n_cleanup_txbastream_tbl(mlan_private * priv, t_u8 * ra);
  *
  *  @param priv     A pointer to mlan_private
  *  @param mac      station mac address
- *  @return 	    MTRUE or MFALSE
+ *  @return         MTRUE or MFALSE
  */
 static INLINE t_u8
 is_station_11n_enabled(mlan_private * priv, t_u8 * mac)

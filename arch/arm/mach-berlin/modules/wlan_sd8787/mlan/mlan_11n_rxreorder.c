@@ -3,20 +3,26 @@
  *  @brief This file contains the handling of RxReordering in wlan
  *  driver.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /********************************************************
@@ -406,6 +412,36 @@ wlan_11n_find_last_seqnum(RxReorderTbl * rx_reorder_tbl_ptr)
 /**
  *  @brief This function flushes all data
  *
+ *  @param priv          A pointer to  mlan_private structure
+ *  @param rx_reor_tbl_ptr  A pointer to RxReorderTbl
+ *
+ *  @return             N/A
+ */
+static t_void
+wlan_start_flush_data(mlan_private * priv, RxReorderTbl * rx_reor_tbl_ptr)
+{
+
+	int startWin;
+
+	ENTER();
+	wlan_11n_display_tbl_ptr(priv->adapter, rx_reor_tbl_ptr);
+
+	startWin = wlan_11n_find_last_seqnum(rx_reor_tbl_ptr);
+	if (startWin >= 0) {
+		PRINTM(MINFO, "Flush data %d\n", startWin);
+		wlan_11n_dispatch_pkt_until_start_win(priv, rx_reor_tbl_ptr,
+						      ((rx_reor_tbl_ptr->
+							start_win + startWin +
+							1) & (MAX_TID_VALUE -
+							      1)));
+	}
+	wlan_11n_display_tbl_ptr(priv->adapter, rx_reor_tbl_ptr);
+	LEAVE();
+}
+
+/**
+ *  @brief This function set the flag to flushes data
+ *
  *  @param context      Reorder context pointer
  *
  *  @return             N/A
@@ -414,26 +450,10 @@ static t_void
 wlan_flush_data(t_void * context)
 {
 	reorder_tmr_cnxt_t *reorder_cnxt = (reorder_tmr_cnxt_t *) context;
-	int startWin;
-
 	ENTER();
+	/* Set the flag to flush data */
+	reorder_cnxt->ptr->flush_data = MTRUE;
 	reorder_cnxt->timer_is_set = MFALSE;
-	wlan_11n_display_tbl_ptr(reorder_cnxt->priv->adapter,
-				 reorder_cnxt->ptr);
-
-	startWin = wlan_11n_find_last_seqnum(reorder_cnxt->ptr);
-	if (startWin >= 0) {
-		PRINTM(MINFO, "Flush data %d\n", startWin);
-		wlan_11n_dispatch_pkt_until_start_win(reorder_cnxt->priv,
-						      reorder_cnxt->ptr,
-						      ((reorder_cnxt->ptr->
-							start_win + startWin +
-							1) & (MAX_TID_VALUE -
-							      1)));
-	}
-
-	wlan_11n_display_tbl_ptr(reorder_cnxt->priv->adapter,
-				 reorder_cnxt->ptr);
 	LEAVE();
 }
 
@@ -555,7 +575,7 @@ wlan_11n_create_rxreorder_tbl(mlan_private * priv, t_u8 * ta, int tid,
  *
  *  @param priv    A pointer to mlan_private
  *  @param ta      ta to find in reordering table
- *  @param tid	   tid to find in reordering table
+ *  @param tid     tid to find in reordering table
  *
  *  @return        A pointer to structure RxReorderTbl
  */
@@ -699,6 +719,7 @@ wlan_cmd_11n_addba_rspgen(mlan_private * priv,
 	win_size =
 		(padd_ba_rsp->block_ack_param_set & BLOCKACKPARAM_WINSIZE_MASK)
 		>> BLOCKACKPARAM_WINSIZE_POS;
+
 	if (win_size == 0)
 		padd_ba_rsp->status_code =
 			wlan_cpu_to_le16(ADDBA_RSP_STATUS_DECLINED);
@@ -781,6 +802,10 @@ mlan_11n_rxreorder_pkt(void *priv, t_u16 seq_num, t_u16 tid,
 		return ret;
 
 	} else {
+		if (rx_reor_tbl_ptr->flush_data) {
+			rx_reor_tbl_ptr->flush_data = MFALSE;
+			wlan_start_flush_data(priv, rx_reor_tbl_ptr);
+		}
 		if ((pkt_type == PKT_TYPE_AMSDU) && !rx_reor_tbl_ptr->amsdu) {
 			wlan_11n_dispatch_pkt(priv, payload);
 			LEAVE();
@@ -857,20 +882,29 @@ mlan_11n_rxreorder_pkt(void *priv, t_u16 seq_num, t_u16 tid,
 		 * If seq_num is less then starting win then ignore and drop
 		 * the packet
 		 */
-		if (rx_reor_tbl_ptr->force_no_drop || pkt_type == PKT_TYPE_BAR) {
+		if (rx_reor_tbl_ptr->force_no_drop) {
 			PRINTM(MDAT_D, "No drop packet\n");
 			rx_reor_tbl_ptr->force_no_drop = MFALSE;
 		} else {
-			if ((start_win + TWOPOW11) > (MAX_TID_VALUE - 1)) {	/* Wrap
-										 */
+			/* Wrap */
+			if ((start_win + TWOPOW11) > (MAX_TID_VALUE - 1)) {
 				if (seq_num >= ((start_win + (TWOPOW11)) &
 						(MAX_TID_VALUE - 1)) &&
 				    (seq_num < start_win)) {
+					if (pkt_type == PKT_TYPE_BAR)
+						PRINTM(MDAT_D,
+						       "BAR: start_win=%d, end_win=%d, seq_num=%d\n",
+						       start_win, end_win,
+						       seq_num);
 					ret = MLAN_STATUS_FAILURE;
 					goto done;
 				}
 			} else if ((seq_num < start_win) ||
-				   (seq_num > (start_win + (TWOPOW11)))) {
+				   (seq_num >= (start_win + (TWOPOW11)))) {
+				if (pkt_type == PKT_TYPE_BAR)
+					PRINTM(MDAT_D,
+					       "BAR: start_win=%d, end_win=%d, seq_num=%d\n",
+					       start_win, end_win, seq_num);
 				ret = MLAN_STATUS_FAILURE;
 				goto done;
 			}

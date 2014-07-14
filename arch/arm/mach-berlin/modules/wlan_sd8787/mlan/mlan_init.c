@@ -3,20 +3,26 @@
  *  @brief This file contains the initialization for FW
  *  and HW.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /********************************************************
@@ -37,7 +43,6 @@ Change log:
 #include "mlan_11h.h"
 #include "mlan_meas.h"
 #include "mlan_sdio.h"
-
 /********************************************************
 			Global Variables
 ********************************************************/
@@ -174,6 +179,14 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 #ifdef STA_SUPPORT
 	t_u32 buf_size;
 	BSSDescriptor_t *ptemp_scan_table = MNULL;
+	t_u8 i = 0;
+	t_u8 chan_2g[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+	t_u8 chan_5g[] = {
+		12, 16, 34, 38, 42, 46, 36, 40, 44,
+		48, 52, 56, 60, 64, 100, 104, 108,
+		112, 116, 120, 124, 128, 132, 136,
+		140, 144, 149, 153, 157, 161, 165
+	};
 #endif
 
 	ENTER();
@@ -216,6 +229,33 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 		return MLAN_STATUS_FAILURE;
 	}
 	pmadapter->bcn_buf_size = DEFAULT_SCAN_BEACON_BUFFER;
+
+	pmadapter->num_in_chan_stats = sizeof(chan_2g);
+	pmadapter->num_in_chan_stats += sizeof(chan_5g);
+	buf_size = sizeof(ChanStatistics_t) * pmadapter->num_in_chan_stats;
+	if (pmadapter->callbacks.moal_vmalloc &&
+	    pmadapter->callbacks.moal_vfree)
+		ret = pmadapter->callbacks.moal_vmalloc(pmadapter->pmoal_handle,
+							buf_size,
+							(t_u8 **) & pmadapter->
+							pchan_stats);
+	else
+		ret = pmadapter->callbacks.moal_malloc(pmadapter->pmoal_handle,
+						       buf_size, MLAN_MEM_DEF,
+						       (t_u8 **) & pmadapter->
+						       pchan_stats);
+	if (ret != MLAN_STATUS_SUCCESS || !pmadapter->pchan_stats) {
+		PRINTM(MERROR, "Failed to allocate channel statistics\n");
+		LEAVE();
+		return MLAN_STATUS_FAILURE;
+	}
+	for (i = 0; i < pmadapter->num_in_chan_stats; i++) {
+		if (i < sizeof(chan_2g))
+			pmadapter->pchan_stats[i].chan_num = chan_2g[i];
+		else
+			pmadapter->pchan_stats[i].chan_num =
+				chan_5g[i - sizeof(chan_2g)];
+	}
 #endif
 
 	/* Allocate command buffer */
@@ -350,6 +390,10 @@ wlan_init_priv(pmlan_private priv)
 	memset(pmadapter, &priv->aes_key, 0, sizeof(priv->aes_key));
 	priv->wpa_ie_len = 0;
 	priv->wpa_is_gtk_set = MFALSE;
+#if defined(STA_SUPPORT)
+	priv->pmfcfg.mfpc = 0;
+	priv->pmfcfg.mfpr = 0;
+#endif
 	priv->sec_info.wapi_enabled = MFALSE;
 	priv->wapi_ie_len = 0;
 	priv->sec_info.wapi_key_on = MFALSE;
@@ -358,8 +402,6 @@ wlan_init_priv(pmlan_private priv)
 	memset(pmadapter, &priv->gen_ie_buf, 0, sizeof(priv->gen_ie_buf));
 	priv->gen_ie_buf_len = 0;
 #endif /* STA_SUPPORT */
-
-	priv->tx_bf_cap = 0;
 	priv->wmm_required = MTRUE;
 	priv->wmm_enabled = MFALSE;
 	priv->wmm_qosinfo = 0;
@@ -376,10 +418,8 @@ wlan_init_priv(pmlan_private priv)
 	priv->addba_reject[7] = ADDBA_RSP_STATUS_REJECT;
 	priv->max_amsdu = 0;
 
-	if (GET_BSS_ROLE(priv) == MLAN_BSS_ROLE_STA)
-		priv->port_ctrl_mode = MTRUE;
-	else
-		priv->port_ctrl_mode = MFALSE;
+	priv->port_ctrl_mode = MTRUE;
+
 	priv->port_open = MFALSE;
 
 	ret = wlan_add_bsspriotbl(priv);
@@ -470,11 +510,10 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 
 	if (!pmadapter->init_para.ps_mode) {
 		pmadapter->ps_mode = DEFAULT_PS_MODE;
-	} else if (pmadapter->init_para.ps_mode == MLAN_INIT_PARA_DISABLED) {
+	} else if (pmadapter->init_para.ps_mode == MLAN_INIT_PARA_DISABLED)
 		pmadapter->ps_mode = Wlan802_11PowerModeCAM;
-	} else {
+	else
 		pmadapter->ps_mode = Wlan802_11PowerModePSP;
-	}
 	pmadapter->ps_state = PS_STATE_AWAKE;
 	pmadapter->need_to_wakeup = MFALSE;
 
@@ -507,13 +546,12 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 
 	pmadapter->is_deep_sleep = MFALSE;
 	pmadapter->idle_time = DEEP_SLEEP_IDLE_TIME;
-	if (!pmadapter->init_para.auto_ds) {
+	if (!pmadapter->init_para.auto_ds)
 		pmadapter->init_auto_ds = DEFAULT_AUTO_DS_MODE;
-	} else if (pmadapter->init_para.auto_ds == MLAN_INIT_PARA_DISABLED) {
+	else if (pmadapter->init_para.auto_ds == MLAN_INIT_PARA_DISABLED)
 		pmadapter->init_auto_ds = MFALSE;
-	} else {
+	else
 		pmadapter->init_auto_ds = MTRUE;
-	}
 
 	pmadapter->delay_null_pkt = MFALSE;
 	pmadapter->delay_to_ps = DELAY_TO_PS_DEFAULT;
@@ -1036,13 +1074,22 @@ wlan_free_adapter(pmlan_adapter pmadapter)
 #ifdef STA_SUPPORT
 	PRINTM(MINFO, "Free ScanTable\n");
 	if (pmadapter->pscan_table) {
-		if (pcb->moal_vmalloc && pcb->moal_vfree) {
+		if (pcb->moal_vmalloc && pcb->moal_vfree)
 			pcb->moal_vfree(pmadapter->pmoal_handle,
 					(t_u8 *) pmadapter->pscan_table);
-		} else
+		else
 			pcb->moal_mfree(pmadapter->pmoal_handle,
 					(t_u8 *) pmadapter->pscan_table);
 		pmadapter->pscan_table = MNULL;
+	}
+	if (pmadapter->pchan_stats) {
+		if (pcb->moal_vmalloc && pcb->moal_vfree)
+			pcb->moal_vfree(pmadapter->pmoal_handle,
+					(t_u8 *) pmadapter->pchan_stats);
+		else
+			pcb->moal_mfree(pmadapter->pmoal_handle,
+					(t_u8 *) pmadapter->pchan_stats);
+		pmadapter->pchan_stats = MNULL;
 	}
 	if (pmadapter->bcn_buf) {
 		if (pcb->moal_vmalloc && pcb->moal_vfree)
@@ -1101,7 +1148,7 @@ wlan_free_priv(mlan_private * pmpriv)
  *  @param pmadapter	A pointer to mlan_adapter structure
  *
  *  @return		MLAN_STATUS_SUCCESS
- *                      	The firmware initialization callback succeeded.
+ *              The firmware initialization callback succeeded.
  */
 mlan_status
 wlan_init_fw_complete(IN pmlan_adapter pmadapter)

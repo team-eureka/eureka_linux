@@ -2,7 +2,7 @@
   *
   * @brief This file contains the CFG80211 specific defines.
   *
-  * Copyright (C) 2011-2012, Marvell International Ltd.
+  * Copyright (C) 2011-2014, Marvell International Ltd.
   *
   * This software file (the "File") is distributed by Marvell International
   * Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -37,7 +37,7 @@
 /* define for custom ie operation */
 #define MLAN_CUSTOM_IE_AUTO_IDX_MASK    0xffff
 #define MLAN_CUSTOM_IE_DELETE_MASK      0x0
-#define MLAN_CUSTOM_IE_NEW_MASK      	0x8000
+#define MLAN_CUSTOM_IE_NEW_MASK         0x8000
 #define TLV_TYPE_MGMT_IE                0x0169
 #define MGMT_MASK_ASSOC_REQ             0x01
 #define MGMT_MASK_REASSOC_REQ           0x04
@@ -190,6 +190,7 @@ int woal_cfg80211_add_virtual_intf(struct wiphy *wiphy,
 #endif
 #endif
 #endif
+int woal_cfg80211_del_virt_if(struct wiphy *wiphy, struct net_device *dev);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
 int woal_cfg80211_del_virtual_intf(struct wiphy *wiphy,
 				   struct wireless_dev *wdev);
@@ -234,7 +235,7 @@ void woal_cfg80211_display_p2p_actframe(const t_u8 * buf, int len,
 #endif /* COMPAT_WIRELESS */
 #if LINUX_VERSION_CODE >= WIFI_DIRECT_KERNEL_VERSION
 /** Define for remain on channel duration timer */
-#define MAX_REMAIN_ON_CHANNEL_DURATION      (1000 * 5)
+#define MAX_REMAIN_ON_CHANNEL_DURATION      (1000)
 
 int woal_cfg80211_init_p2p_client(moal_private * priv);
 

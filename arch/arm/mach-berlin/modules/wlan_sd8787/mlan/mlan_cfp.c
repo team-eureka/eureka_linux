@@ -4,20 +4,26 @@
  *  @brief This file contains WLAN client mode channel, frequency and power
  *  related code
  *
- *  Copyright (C) 2009-2012, Marvell International Ltd.
+ *  (C) Copyright 2009-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /*************************************************************
@@ -663,8 +669,9 @@ static cfp_table_t cfp_table_A[] = {
 /**
  * The table to keep region code
  */
-t_u16 region_code_index[MRVDRV_MAX_REGION_CODE] =
-	{ 0x10, 0x20, 0x30, 0x32, 0x40, 0x41, 0x50, 0xfe, 0xff };
+t_u16 region_code_index[MRVDRV_MAX_REGION_CODE] = {
+	0x10, 0x20, 0x30, 0x32, 0x40, 0x41, 0x50, 0xfe, 0xff
+};
 
 /** The table to keep CFP code for BG */
 t_u16 cfp_code_index_bg[MRVDRV_MAX_CFP_CODE_BG] = { };
@@ -680,34 +687,37 @@ t_u8 AdhocRates_B[B_SUPPORTED_RATES] = { 0x82, 0x84, 0x8b, 0x96, 0 };
 /**
  * The rates supported for ad-hoc G mode
  */
-t_u8 AdhocRates_G[G_SUPPORTED_RATES] =
-	{ 0x8c, 0x12, 0x98, 0x24, 0xb0, 0x48, 0x60, 0x6c, 0 };
+t_u8 AdhocRates_G[G_SUPPORTED_RATES] = {
+	0x8c, 0x12, 0x98, 0x24, 0xb0, 0x48, 0x60, 0x6c, 0x00
+};
 
 /**
  * The rates supported for ad-hoc BG mode
  */
-t_u8 AdhocRates_BG[BG_SUPPORTED_RATES] =
-	{ 0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24, 0x30, 0x48,
-	0x60, 0x6c, 0
+t_u8 AdhocRates_BG[BG_SUPPORTED_RATES] = {
+	0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24, 0x30, 0x48,
+	0x60, 0x6c, 0x00
 };
 
 /**
  * The rates supported in A mode for ad-hoc
  */
-t_u8 AdhocRates_A[A_SUPPORTED_RATES] =
-	{ 0x8c, 0x12, 0x98, 0x24, 0xb0, 0x48, 0x60, 0x6c, 0 };
+t_u8 AdhocRates_A[A_SUPPORTED_RATES] = {
+	0x8c, 0x12, 0x98, 0x24, 0xb0, 0x48, 0x60, 0x6c, 0x00
+};
 
 /**
  * The rates supported in A mode (used for BAND_A)
  */
-t_u8 SupportedRates_A[A_SUPPORTED_RATES] =
-	{ 0x0c, 0x12, 0x18, 0x24, 0xb0, 0x48, 0x60, 0x6c, 0 };
+t_u8 SupportedRates_A[A_SUPPORTED_RATES] = {
+	0x0c, 0x12, 0x18, 0x24, 0xb0, 0x48, 0x60, 0x6c, 0x00
+};
 
 /**
  * The rates supported by the card
  */
-t_u16 WlanDataRates[WLAN_SUPPORTED_RATES_EXT] =
-	{ 0x02, 0x04, 0x0B, 0x16, 0x00, 0x0C, 0x12,
+t_u16 WlanDataRates[WLAN_SUPPORTED_RATES_EXT] = {
+	0x02, 0x04, 0x0B, 0x16, 0x00, 0x0C, 0x12,
 	0x18, 0x24, 0x30, 0x48, 0x60, 0x6C, 0x90,
 	0x0D, 0x1A, 0x27, 0x34, 0x4E, 0x68, 0x75,
 	0x82, 0x0C, 0x1B, 0x36, 0x51, 0x6C, 0xA2,
@@ -717,20 +727,23 @@ t_u16 WlanDataRates[WLAN_SUPPORTED_RATES_EXT] =
 /**
  * The rates supported in B mode
  */
-t_u8 SupportedRates_B[B_SUPPORTED_RATES] = { 0x02, 0x04, 0x0b, 0x16, 0 };
+t_u8 SupportedRates_B[B_SUPPORTED_RATES] = {
+	0x02, 0x04, 0x0b, 0x16, 0x00
+};
 
 /**
  * The rates supported in G mode (BAND_G, BAND_G|BAND_GN)
  */
-t_u8 SupportedRates_G[G_SUPPORTED_RATES] =
-	{ 0x0c, 0x12, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6c, 0 };
+t_u8 SupportedRates_G[G_SUPPORTED_RATES] = {
+	0x0c, 0x12, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6c, 0x00
+};
 
 /**
  * The rates supported in BG mode (BAND_B|BAND_G, BAND_B|BAND_G|BAND_GN)
  */
-t_u8 SupportedRates_BG[BG_SUPPORTED_RATES] =
-	{ 0x02, 0x04, 0x0b, 0x0c, 0x12, 0x16, 0x18, 0x24, 0x30, 0x48,
-	0x60, 0x6c, 0
+t_u8 SupportedRates_BG[BG_SUPPORTED_RATES] = {
+	0x02, 0x04, 0x0b, 0x0c, 0x12, 0x16, 0x18, 0x24, 0x30, 0x48,
+	0x60, 0x6c, 0x00
 };
 
 /**

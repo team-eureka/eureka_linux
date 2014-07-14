@@ -2,7 +2,7 @@
  *
  *  @brief This file declares the IOCTL data structures and APIs.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  Copyright (C) 2008-2014, Marvell International Ltd.
  *
  *  This software file (the "File") is distributed by Marvell International
  *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -110,6 +110,7 @@ enum _mlan_ioctl_req_id {
 	MLAN_OID_SEC_CFG_ESUPP_MODE = 0x00060007,
 	MLAN_OID_SEC_CFG_WAPI_ENABLED = 0x00060009,
 	MLAN_OID_SEC_CFG_PORT_CTRL_ENABLED = 0x0006000A,
+	MLAN_OID_SEC_QUERY_KEY = 0x0006000C,
 
 	/* Rate Group */
 	MLAN_IOCTL_RATE = 0x00070000,
@@ -205,6 +206,7 @@ enum _mlan_ioctl_req_id {
 	MLAN_OID_MISC_WWS = 0x0020000B,
 	MLAN_OID_MISC_ASSOC_RSP = 0x0020000C,
 	MLAN_OID_MISC_INIT_SHUTDOWN = 0x0020000D,
+	MLAN_OID_MISC_COALESCING_STATUS = 0x0020000E,
 	MLAN_OID_MISC_CUSTOM_IE = 0x0020000F,
 	MLAN_OID_MISC_TDLS_CONFIG = 0x00200010,
 	MLAN_OID_MISC_TX_DATAPAUSE = 0x00200012,
@@ -219,10 +221,14 @@ enum _mlan_ioctl_req_id {
 #ifdef DEBUG_LEVEL1
 	MLAN_OID_MISC_DRVDBG = 0x0020001B,
 #endif
+	MLAN_OID_MISC_HOTSPOT_CFG = 0x0020001C,
 	MLAN_OID_MISC_OTP_USER_DATA = 0x0020001D,
 	MLAN_OID_MISC_TXCONTROL = 0x00200020,
 #ifdef STA_SUPPORT
 	MLAN_OID_MISC_EXT_CAP_CFG = 0x00200021,
+#endif
+#if defined(STA_SUPPORT)
+	MLAN_OID_MISC_PMFCFG = 0x00200022,
 #endif
 #ifdef WIFI_DIRECT_SUPPORT
 	MLAN_OID_MISC_WIFI_DIRECT_CONFIG = 0x00200025,
@@ -305,6 +311,15 @@ typedef struct _mlan_802_11_ssid {
 	t_u8 ssid[MLAN_MAX_SSID_LENGTH];
 } mlan_802_11_ssid, *pmlan_802_11_ssid;
 
+typedef MLAN_PACK_START struct _tx_status_event {
+    /** packet type */
+	t_u8 packet_type;
+    /** tx_token_id */
+	t_u8 tx_token_id;
+    /** 0--success, 1--fail, 2--watchdogtimeout */
+	t_u8 status;
+} MLAN_PACK_END tx_status_event;
+
 /**
  *  Sructure to retrieve the scan table
  */
@@ -347,14 +362,14 @@ typedef struct _wlan_ioctl_get_scan_table_entry {
 	wlan_get_scan_table_fixed fixed_fields;
 
 	/*
-	 *  Probe response or beacon scanned for the BSS.
+	 * Probe response or beacon scanned for the BSS.
 	 *
-	 *  Field layout:
-	 *   - TSF              8 octets
-	 *   - Beacon Interval  2 octets
-	 *   - Capability Info  2 octets
+	 * Field layout:
+	 *  - TSF              8 octets
+	 *  - Beacon Interval  2 octets
+	 *  - Capability Info  2 octets
 	 *
-	 *   - IEEE Infomation Elements; variable number & length per 802.11 spec
+	 *  - IEEE Infomation Elements; variable number & length per 802.11 spec
 	 */
 	/* t_u8 bss_info_buffer[0]; */
 } wlan_ioctl_get_scan_table_entry;
@@ -399,6 +414,10 @@ typedef struct _mlan_scan_resp {
 	t_u8 *pscan_table;
 	/* Age in seconds */
 	t_u32 age_in_secs;
+    /** channel statstics */
+	t_u8 *pchan_stats;
+    /** Number of records in the chan_stats */
+	t_u32 num_in_chan_stats;
 } mlan_scan_resp, *pmlan_scan_resp;
 
 /** Type definition of mlan_scan_cfg */
@@ -463,7 +482,7 @@ enum _mlan_bss_mode {
 /** Receive multicast packets in multicast list */
 #define MLAN_MULTICAST_MODE		2
 /** Receive all multicast packets */
-#define	MLAN_ALL_MULTI_MODE		4
+#define MLAN_ALL_MULTI_MODE		4
 
 /** Maximum size of multicast list */
 #define MLAN_MAX_MULTICAST_LIST_SIZE	32
@@ -756,7 +775,7 @@ typedef struct _wmm_parameter_t {
 /** 5G band */
 #define BAND_CONFIG_5G        0x01
 /** 2.4 G band */
-#define BAND_CONFIG_2G		  0x00
+#define BAND_CONFIG_2G        0x00
 /** MAX BG channel */
 #define MAX_BG_CHANNEL 14
 /** mlan_bss_param
@@ -880,7 +899,7 @@ typedef struct _mlan_deauth_param {
 /** mode: listen */
 #define WIFI_DIRECT_MODE_LISTEN			1
 /** mode: GO */
-#define WIFI_DIRECT_MODE_GO		        2
+#define WIFI_DIRECT_MODE_GO             2
 /** mode: client */
 #define WIFI_DIRECT_MODE_CLIENT			3
 /** mode: find */
@@ -1200,6 +1219,8 @@ typedef struct _mlan_fw_info {
 	t_u32 fw_ver;
     /** MAC address */
 	mlan_802_11_mac_addr mac_addr;
+    /** 802.11n device capabilities */
+	t_u32 hw_dot_11n_dev_cap;
     /** Device support for MIMO abstraction of MCSs */
 	t_u8 hw_dev_mcs_support;
 	/** fw supported band */
@@ -1306,7 +1327,7 @@ typedef struct {
 
 #ifdef SDIO_MULTI_PORT_TX_AGGR
 /** sdio mp debug number */
-#define SDIO_MP_DBG_NUM                  6
+#define SDIO_MP_DBG_NUM                  10
 #endif
 
 /** Maximum size of IEEE Information Elements */
@@ -1496,6 +1517,8 @@ typedef struct _mlan_debug_info {
 	t_u32 mlan_processing;
     /** mlan_rx_processing */
 	t_u32 mlan_rx_processing;
+    /** rx pkts queued */
+	t_u32 rx_pkts_queued;
     /** mlan_adapter pointer */
 	t_void *mlan_adapter;
     /** mlan_adapter_size */
@@ -1566,9 +1589,20 @@ typedef struct _mlan_ds_get_info {
 enum _mlan_auth_mode {
 	MLAN_AUTH_MODE_OPEN = 0x00,
 	MLAN_AUTH_MODE_SHARED = 0x01,
+	MLAN_AUTH_MODE_FT = 0x02,
 	MLAN_AUTH_MODE_NETWORKEAP = 0x80,
 	MLAN_AUTH_MODE_AUTO = 0xFF,
 };
+
+/**Enumeration for AssocAgent authentication mode, sync from FW.*/
+typedef enum {
+	AssocAgentAuth_Open,
+	AssocAgentAuth_Shared,
+	AssocAgentAuth_FastBss,
+	AssocAgentAuth_FastBss_Skip,
+	AssocAgentAuth_Network_EAP,
+	AssocAgentAuth_Auto,
+} AssocAgentAuthType_e;
 
 /** Enumeration for encryption mode */
 enum _mlan_encryption_mode {
@@ -1731,9 +1765,9 @@ typedef struct _mlan_ds_sec_cfg {
 		mlan_ds_encrypt_key encrypt_key;
 	/** Passphrase for MLAN_OID_SEC_CFG_PASSPHRASE */
 		mlan_ds_passphrase passphrase;
-	/** Embedded supplicant WPA enabled flag for
-         *  MLAN_OID_SEC_CFG_EWPA_ENABLED
-         */
+		/** Embedded supplicant WPA enabled flag for
+		 *  MLAN_OID_SEC_CFG_EWPA_ENABLED
+		 */
 		t_u32 ewpa_enabled;
 	/** Embedded supplicant mode for MLAN_OID_SEC_CFG_ESUPP_MODE */
 		mlan_ds_esupp_mode esupp_mode;
@@ -1838,9 +1872,9 @@ typedef struct _mlan_power_cfg_t {
 } mlan_power_cfg_t;
 
 /** max power table size */
-#define MAX_POWER_TABLE_SIZE 	128
+#define MAX_POWER_TABLE_SIZE    128
 /** The HT BW40 bit in Tx rate index */
-#define TX_RATE_HT_BW40_BIT 	MBIT(7)
+#define TX_RATE_HT_BW40_BIT     MBIT(7)
 
 /** Type definition of mlan_power_cfg_ext for MLAN_OID_POWER_CFG_EXT */
 typedef struct _mlan_power_cfg_ext {
@@ -2524,12 +2558,19 @@ typedef struct _mlan_ds_11d_cfg {
 /*-----------------------------------------------------------------*/
 /** Register Memory Access Group */
 /*-----------------------------------------------------------------*/
+/** Enumeration for CSU target device type */
+enum _mlan_csu_target_type {
+	MLAN_CSU_TARGET_CAU = 1,
+	MLAN_CSU_TARGET_PSU,
+};
+
 /** Enumeration for register type */
 enum _mlan_reg_type {
 	MLAN_REG_MAC = 1,
 	MLAN_REG_BBP,
 	MLAN_REG_RF,
 	MLAN_REG_CAU = 5,
+	MLAN_REG_PSU = 6,
 };
 
 /** Type definition of mlan_ds_reg_rw for MLAN_OID_REG_RW */
@@ -2708,6 +2749,12 @@ enum _mlan_func_cmd {
 	MLAN_FUNC_SHUTDOWN,
 };
 
+/** Enumeration for Coalescing status */
+enum _mlan_coal_status {
+	MLAN_MISC_COALESCING_ENABLE = 1,
+	MLAN_MISC_COALESCING_DISABLE = 0
+};
+
 /** Type definition of mlan_ds_misc_tx_datapause
  * for MLAN_OID_MISC_TX_DATAPAUSE
  */
@@ -2786,31 +2833,31 @@ typedef struct _mlan_ds_misc_country_code {
 /** action for clear */
 #define SUBSCRIBE_EVT_ACT_BITWISE_CLR         0x0003
 /** BITMAP for subscribe event rssi low */
-#define SUBSCRIBE_EVT_RSSI_LOW  		MBIT(0)
+#define SUBSCRIBE_EVT_RSSI_LOW          MBIT(0)
 /** BITMAP for subscribe event snr low */
-#define SUBSCRIBE_EVT_SNR_LOW			MBIT(1)
+#define SUBSCRIBE_EVT_SNR_LOW           MBIT(1)
 /** BITMAP for subscribe event max fail */
-#define SUBSCRIBE_EVT_MAX_FAIL			MBIT(2)
+#define SUBSCRIBE_EVT_MAX_FAIL          MBIT(2)
 /** BITMAP for subscribe event beacon missed */
-#define SUBSCRIBE_EVT_BEACON_MISSED 	MBIT(3)
+#define SUBSCRIBE_EVT_BEACON_MISSED     MBIT(3)
 /** BITMAP for subscribe event rssi high */
-#define SUBSCRIBE_EVT_RSSI_HIGH			MBIT(4)
+#define SUBSCRIBE_EVT_RSSI_HIGH         MBIT(4)
 /** BITMAP for subscribe event snr high */
-#define SUBSCRIBE_EVT_SNR_HIGH			MBIT(5)
+#define SUBSCRIBE_EVT_SNR_HIGH          MBIT(5)
 /** BITMAP for subscribe event data rssi low */
-#define SUBSCRIBE_EVT_DATA_RSSI_LOW		MBIT(6)
+#define SUBSCRIBE_EVT_DATA_RSSI_LOW     MBIT(6)
 /** BITMAP for subscribe event data snr low */
-#define SUBSCRIBE_EVT_DATA_SNR_LOW		MBIT(7)
+#define SUBSCRIBE_EVT_DATA_SNR_LOW      MBIT(7)
 /** BITMAP for subscribe event data rssi high */
-#define SUBSCRIBE_EVT_DATA_RSSI_HIGH	MBIT(8)
+#define SUBSCRIBE_EVT_DATA_RSSI_HIGH    MBIT(8)
 /** BITMAP for subscribe event data snr high */
-#define SUBSCRIBE_EVT_DATA_SNR_HIGH		MBIT(9)
+#define SUBSCRIBE_EVT_DATA_SNR_HIGH     MBIT(9)
 /** BITMAP for subscribe event link quality */
-#define SUBSCRIBE_EVT_LINK_QUALITY		MBIT(10)
+#define SUBSCRIBE_EVT_LINK_QUALITY      MBIT(10)
 /** BITMAP for subscribe event pre_beacon_lost */
-#define SUBSCRIBE_EVT_PRE_BEACON_LOST	MBIT(11)
+#define SUBSCRIBE_EVT_PRE_BEACON_LOST   MBIT(11)
 /** default PRE_BEACON_MISS_COUNT */
-#define DEFAULT_PRE_BEACON_MISS			30
+#define DEFAULT_PRE_BEACON_MISS         30
 
 /** Type definition of mlan_ds_subscribe_evt for MLAN_OID_MISC_CFP_CODE */
 typedef struct _mlan_ds_subscribe_evt {
@@ -2937,6 +2984,15 @@ typedef struct _mlan_ds_wifi_direct_config {
 } mlan_ds_wifi_direct_config;
 #endif
 
+#if defined(STA_SUPPORT)
+typedef struct _mlan_ds_misc_pmfcfg {
+    /** Management Frame Protection Capable */
+	t_u8 mfpc;
+    /** Management Frame Protection Required */
+	t_u8 mfpr;
+} mlan_ds_misc_pmfcfg;
+#endif
+
 /**Action ID for TDLS disable link*/
 #define WLAN_TDLS_DISABLE_LINK           0x00
 /**Action ID for TDLS enable link*/
@@ -2953,7 +3009,7 @@ typedef struct _mlan_ds_misc_tdls_oper {
 	t_u16 tdls_action;
     /** TDLS peer address */
 	t_u8 peer_mac[MLAN_MAC_ADDR_LENGTH];
-	/** peer capability */
+    /** peer capability */
 	t_u16 capability;
 	/** peer qos info */
 	t_u8 qos_info;
@@ -3014,6 +3070,8 @@ typedef struct _mlan_ds_misc_cfg {
 		mlan_ds_misc_assoc_rsp assoc_resp;
 	/** Function init/shutdown for MLAN_OID_MISC_INIT_SHUTDOWN */
 		t_u32 func_init_shutdown;
+	/** Coalescing status for MLAN_OID_MISC_COALESCING_STATUS */
+		t_u16 coalescing_status;
 	/** Custom IE for MLAN_OID_MISC_CUSTOM_IE */
 		mlan_ds_misc_custom_ie cust_ie;
 	/** TDLS configuration for MLAN_OID_MISC_TDLS_CONFIG */
@@ -3044,12 +3102,17 @@ typedef struct _mlan_ds_misc_cfg {
 	/** Driver debug bit masks */
 		t_u32 drvdbg;
 #endif
+	/** Hotspot config param set */
+		t_u32 hotspot_cfg;
 #ifdef STA_SUPPORT
 		t_u8 ext_cap[8];
 #endif
 		mlan_ds_misc_otp_user_data otp_user_data;
 	/** Tx control */
 		t_u32 tx_control;
+#if defined(STA_SUPPORT)
+		mlan_ds_misc_pmfcfg pmfcfg;
+#endif
 #ifdef WIFI_DIRECT_SUPPORT
 		mlan_ds_wifi_direct_config p2p_config;
 #endif

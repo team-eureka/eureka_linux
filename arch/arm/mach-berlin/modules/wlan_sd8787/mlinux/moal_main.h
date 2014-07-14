@@ -2,7 +2,7 @@
   *
   * @brief This file contains wlan driver specific defines etc.
   *
-  * Copyright (C) 2008-2012, Marvell International Ltd.
+  * Copyright (C) 2008-2014, Marvell International Ltd.
   *
   * This software file (the "File") is distributed by Marvell International
   * Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -104,6 +104,18 @@ Change log:
 #define REFDATA __refdata
 #else
 #define REFDATA
+#endif
+
+/**
+ * Linux Kernels later 3.9 use CONFIG_PM_RUNTIME instead of
+ * CONFIG_USB_SUSPEND
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#ifdef CONFIG_PM_RUNTIME
+#ifndef CONFIG_USB_SUSPEND
+#define CONFIG_USB_SUSPEND
+#endif
+#endif
 #endif
 
 /** Define BOOLEAN */
@@ -262,7 +274,7 @@ woal_mod_timer(pmoal_drv_timer timer, t_u32 millisecondperiod)
 static inline void
 woal_cancel_timer(moal_drv_timer * timer)
 {
-	if (timer->timer_is_periodic)
+	if (timer->timer_is_periodic || in_atomic() || irqs_disabled())
 		del_timer(&timer->tl);
 	else
 		del_timer_sync(&timer->tl);
@@ -513,6 +525,11 @@ out:
 /** Threshold value of number of times the Tx timeout happened */
 #define NUM_TX_TIMEOUT_THRESHOLD      5
 
+/** TDLS connected event */
+#define CUS_EVT_TDLS_CONNECTED           "EVENT=TDLS_CONNECTED"
+/** TDLS tear down event */
+#define CUS_EVT_TDLS_TEARDOWN            "EVENT=TDLS_TEARDOWN"
+
 /** AP connected event */
 #define CUS_EVT_AP_CONNECTED           "EVENT=AP_CONNECTED"
 
@@ -526,9 +543,9 @@ out:
 /** Custom event : AdHoc link lost */
 #define CUS_EVT_ADHOC_LINK_LOST		"EVENT=ADHOC_LINK_LOST"
 /** Custom event : MIC failure, unicast */
-#define CUS_EVT_MLME_MIC_ERR_UNI	"MLME-MICHAELMICFAILURE.indication unicast "
+#define CUS_EVT_MLME_MIC_ERR_UNI	"MLME-MICHAELMICFAILURE.indication unicast"
 /** Custom event : MIC failure, multicast */
-#define CUS_EVT_MLME_MIC_ERR_MUL	"MLME-MICHAELMICFAILURE.indication multicast "
+#define CUS_EVT_MLME_MIC_ERR_MUL	"MLME-MICHAELMICFAILURE.indication multicast"
 /** Custom event : Beacon RSSI low */
 #define CUS_EVT_BEACON_RSSI_LOW		"EVENT=BEACON_RSSI_LOW"
 /** Custom event : Beacon SNR low */
@@ -558,9 +575,9 @@ out:
 #define CUS_EVT_DEEP_SLEEP_AWAKE	"EVENT=DS_AWAKE"
 
 /** Custom event : Host Sleep activated */
-#define CUS_EVT_HS_ACTIVATED		"HS_ACTIVATED "
+#define CUS_EVT_HS_ACTIVATED		"HS_ACTIVATED"
 /** Custom event : Host Sleep deactivated */
-#define CUS_EVT_HS_DEACTIVATED		"HS_DEACTIVATED "
+#define CUS_EVT_HS_DEACTIVATED		"HS_DEACTIVATED"
 /** Custom event : Host Sleep wakeup */
 #define CUS_EVT_HS_WAKEUP		"HS_WAKEUP"
 
@@ -612,6 +629,8 @@ out:
 /** Netlink multicast group number */
 #define NL_MULTICAST_GROUP  1
 
+#define MAX_RX_PENDING_THRHLD	50
+
 /** MAX Tx Pending count */
 #define MAX_TX_PENDING      100
 
@@ -621,6 +640,11 @@ out:
 /** Offset for subcommand */
 #define SUBCMD_OFFSET       4
 
+/** default scan channel gap  */
+#define DEF_SCAN_CHAN_GAP   50
+/** default scan time per channel in miracast mode */
+#define DEF_MIRACAST_SCAN_TIME   20
+
 /** Macro to extract the TOS field from a skb */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22)
 #define SKB_TOS(skb) (ip_hdr(skb)->tos)
@@ -628,6 +652,8 @@ out:
 #define SKB_TOS(skb) (skb->nh.iph->tos)
 #endif
 #define SKB_TIDV6(skb)  (ipv6_get_dsfield(ipv6_hdr(skb)))
+#define IS_SKB_MAGIC_VLAN(skb) (skb->priority >= 256 && skb->priority <= 263)
+#define GET_VLAN_PRIO(skb) (skb->priority - 256)
 
 /** Offset for TOS field in the IP header */
 #define IPTOS_OFFSET 5
@@ -642,7 +668,7 @@ typedef struct _wait_queue {
 	/** Wait condition */
 	BOOLEAN condition;
 	/** Start time */
-	t_u32 start_time;
+	long start_time;
 	/** Status from MLAN */
 	mlan_status status;
     /** flag for wait_timeout */
@@ -694,7 +720,7 @@ typedef struct _wait_queue {
 /** Driver mode WIFIDIRECT bit */
 #define DRV_MODE_WIFIDIRECT       MBIT(2)
 /** Maximum WIFIDIRECT BSS */
-#define MAX_WIFIDIRECT_BSS        1
+#define MAX_WIFIDIRECT_BSS        2
 /** Default WIFIDIRECT BSS */
 #define DEF_WIFIDIRECT_BSS        1
 #define DEF_VIRTUAL_BSS			  0
@@ -782,6 +808,10 @@ struct _moal_private {
 	/** uAP started or not */
 	BOOLEAN bss_started;
 #endif
+    /** IP addr type */
+	t_u32 ip_addr_type;
+    /** IP addr */
+	t_u8 ip_addr[IPADDR_LEN];
 #ifdef STA_SUPPORT
 	/** scan type */
 	t_u8 scan_type;
@@ -793,6 +823,22 @@ struct _moal_private {
 	wlan_bgscan_cfg scan_cfg;
 	/** sched scaning flag */
 	t_u8 sched_scanning;
+    /** roaming enabled flag */
+	t_u8 roaming_enabled;
+	/** rssi low threshold */
+	int rssi_low;
+    /** channel for connect */
+	struct ieee80211_channel conn_chan;
+    /** bssid for connect */
+	t_u8 conn_bssid[ETH_ALEN];
+    /** ssid for connect */
+	t_u8 conn_ssid[MLAN_MAX_SSID_LENGTH];
+	/** key data */
+	t_u8 conn_wep_key[MAX_WEP_KEY_SIZE];
+    /** connection param */
+	struct cfg80211_connect_params sme_current;
+    /** roaming required flag */
+	t_u8 roaming_required;
 #endif
 	/** Net device pointer */
 	struct net_device *netdev;
@@ -837,6 +883,8 @@ struct _moal_private {
 	bool cfg_disconnect;
     /** connect request from CFG80211 */
 	bool cfg_connect;
+    /** lock for cfg connect */
+	spinlock_t connect_lock;
 	/** assoc status */
 	t_u32 assoc_status;
 	/** rssi_threshold */
@@ -851,7 +899,8 @@ struct _moal_private {
 	u8 mrvl_rssi_low;
 	/** last event */
 	u32 last_event;
-
+	/** fake scan flag */
+	u8 fake_scan_complete;
 #endif				/* STA_SUPPORT */
 	/** IOCTL wait queue */
 	wait_queue_head_t ioctl_wait_q __ATTRIB_ALIGN__;
@@ -928,6 +977,16 @@ struct _moal_private {
 #endif
     /** per interface extra headroom */
 	t_u16 extra_tx_head_len;
+    /** TX status spin lock */
+	spinlock_t tx_stat_lock;
+    /** tx_seq_num */
+	t_u8 tx_seq_num;
+    /** tx_buf */
+	t_u8 *last_tx_buf;
+    /** tx_buf_len */
+	t_u8 last_tx_buf_len;
+    /** cookie */
+	t_u64 last_tx_cookie;
 };
 
 /** Handle data structure for MOAL */
@@ -956,7 +1015,7 @@ struct _moal_handle {
 	const struct firmware *user_data;
 	/** Hotplug device */
 	struct device *hotplug_device;
-	/** STATUS variables */
+    /** STATUS variables */
 	MOAL_HARDWARE_STATUS hardware_status;
 	/** POWER MANAGEMENT AND PnP SUPPORT */
 	BOOLEAN surprise_removed;
@@ -1031,7 +1090,13 @@ struct _moal_handle {
 	enum ieee80211_band band;
     /** first scan done flag */
 	t_u8 first_scan_done;
+    /** scan channel gap */
+	t_u16 scan_chan_gap;
 #ifdef WIFI_DIRECT_SUPPORT
+    /** miracast mode */
+	t_u8 miracast_mode;
+	/** scan time in miracast mode */
+	t_u16 miracast_scan_time;
 	/** remain on channel flag */
 	t_u8 remain_on_channel;
 	/** bss index for remain on channel */
@@ -1068,7 +1133,7 @@ struct _moal_handle {
     /** w_stats wait queue */
 	wait_queue_head_t meas_wait_q __ATTRIB_ALIGN__;
     /** Measurement start jiffes */
-	t_u32 meas_start_jiffies;
+	long meas_start_jiffies;
     /** CAC checking period flag */
 	BOOLEAN cac_period;
     /** BSS START command delay executing flag */
@@ -1077,7 +1142,7 @@ struct _moal_handle {
 	mlan_ssid_bssid delay_ssid_bssid;
 #ifdef DFS_TESTING_SUPPORT
     /** cac period length, valid only when dfs testing is enabled */
-	t_u32 cac_period_jiffies;
+	long cac_period_jiffies;
 #endif
     /** handle index - for multiple card supports */
 	t_u8 handle_idx;
@@ -1109,8 +1174,11 @@ struct _moal_handle {
 #endif
 	/** Driver spin lock */
 	spinlock_t driver_lock;
+	/** Driver ioctl spin lock */
+	spinlock_t ioctl_lock;
 	/** Card specific driver version */
 	t_s8 driver_version[MLAN_MAX_VER_STR_LEN];
+
 };
 
 /**
@@ -1203,43 +1271,73 @@ extern t_u32 drvdbg;
 #define LOG_CTRL(level)     (0)
 
 #ifdef	DEBUG_LEVEL2
-#define	PRINTM_MINFO(level, msg...)  do {woal_print(level, msg); \
-		if (drvdbg & MINFO) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MWARN(level, msg...)  do {woal_print(level, msg); \
-		if (drvdbg & MWARN) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MENTRY(level, msg...) do {woal_print(level, msg); \
-		if (drvdbg & MENTRY) printk(KERN_DEBUG msg); } while (0)
+#define	PRINTM_MINFO(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MINFO) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MWARN(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MWARN) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MENTRY(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MENTRY) printk(KERN_DEBUG msg); \
+} while (0)
 #else
 #define	PRINTM_MINFO(level, msg...)  do {} while (0)
 #define	PRINTM_MWARN(level, msg...)  do {} while (0)
 #define	PRINTM_MENTRY(level, msg...) do {} while (0)
 #endif /* DEBUG_LEVEL2 */
 
-#define	PRINTM_MFW_D(level, msg...)  do {woal_print(level, msg); \
-		if (drvdbg & MFW_D) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MCMD_D(level, msg...) do {woal_print(level, msg); \
-		if (drvdbg & MCMD_D) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MDAT_D(level, msg...) do {woal_print(level, msg); \
-		if (drvdbg & MDAT_D) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MIF_D(level, msg...)  do {woal_print(level, msg); \
-		if (drvdbg & MIF_D) printk(KERN_DEBUG msg); } while (0)
+#define	PRINTM_MFW_D(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MFW_D) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MCMD_D(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MCMD_D) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MDAT_D(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MDAT_D) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MIF_D(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MIF_D) printk(KERN_DEBUG msg); \
+} while (0)
 
-#define	PRINTM_MIOCTL(level, msg...) do {woal_print(level, msg); \
-		if (drvdbg & MIOCTL) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MINTR(level, msg...)  do {woal_print(level, msg); \
-		if (drvdbg & MINTR) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MEVENT(level, msg...) do {woal_print(level, msg); \
-		if (drvdbg & MEVENT) printk(msg); } while (0)
-#define	PRINTM_MCMND(level, msg...)  do {woal_print(level, msg); \
-		if (drvdbg & MCMND) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MDATA(level, msg...)  do {woal_print(level, msg); \
-		if (drvdbg & MDATA) printk(KERN_DEBUG msg); } while (0)
-#define	PRINTM_MERROR(level, msg...) do {woal_print(level, msg); \
-		if (drvdbg & MERROR) printk(KERN_ERR msg); } while (0)
-#define	PRINTM_MFATAL(level, msg...) do {woal_print(level, msg); \
-		if (drvdbg & MFATAL) printk(KERN_ERR msg); } while (0)
-#define	PRINTM_MMSG(level, msg...)   do {woal_print(level, msg); \
-		if (drvdbg & MMSG) printk(KERN_ALERT msg); } while (0)
+#define	PRINTM_MIOCTL(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MIOCTL) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MINTR(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MINTR) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MEVENT(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MEVENT) printk(msg); \
+} while (0)
+#define	PRINTM_MCMND(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MCMND) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MDATA(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MDATA) printk(KERN_DEBUG msg); \
+} while (0)
+#define	PRINTM_MERROR(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MERROR) printk(KERN_ERR msg); \
+} while (0)
+#define	PRINTM_MFATAL(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MFATAL) printk(KERN_ERR msg); \
+} while (0)
+#define	PRINTM_MMSG(level, msg...) do { \
+	woal_print(level, msg); \
+	if (drvdbg & MMSG) printk(KERN_ALERT msg); \
+} while (0)
 
 static inline void
 woal_print(t_u32 level, char *fmt, ...)
@@ -1300,18 +1398,30 @@ hexdump(t_u32 level, char *prompt, t_u8 * buf, int len)
 	}
 }
 
-#define DBG_HEXDUMP_MERROR(x, y, z)  do {if ((drvdbg & MERROR) || \
-		LOG_CTRL(MERROR)) hexdump(MERROR, x, y, z); } while (0)
-#define DBG_HEXDUMP_MCMD_D(x, y, z)  do {if ((drvdbg & MCMD_D) || \
-		LOG_CTRL(MCMD_D)) hexdump(MCMD_D, x, y, z); } while (0)
-#define DBG_HEXDUMP_MDAT_D(x, y, z)  do {if ((drvdbg & MDAT_D) || \
-		LOG_CTRL(MDAT_D)) hexdump(MDAT_D, x, y, z); } while (0)
-#define DBG_HEXDUMP_MIF_D(x, y, z)   do {if ((drvdbg & MIF_D)  || \
-		LOG_CTRL(MIF_D))  hexdump(MIF_D, x, y, z); } while (0)
-#define DBG_HEXDUMP_MEVT_D(x, y, z)  do {if ((drvdbg & MEVT_D) || \
-		LOG_CTRL(MEVT_D)) hexdump(MEVT_D, x, y, z); } while (0)
-#define DBG_HEXDUMP_MFW_D(x, y, z)   do {if ((drvdbg & MFW_D)  || \
-		LOG_CTRL(MFW_D))  hexdump(MFW_D, x, y, z); } while (0)
+#define DBG_HEXDUMP_MERROR(x, y, z) do { \
+	if ((drvdbg & MERROR) || LOG_CTRL(MERROR)) \
+		hexdump(MERROR, x, y, z); \
+} while (0)
+#define DBG_HEXDUMP_MCMD_D(x, y, z) do { \
+	if ((drvdbg & MCMD_D) || LOG_CTRL(MCMD_D)) \
+		hexdump(MCMD_D, x, y, z); \
+} while (0)
+#define DBG_HEXDUMP_MDAT_D(x, y, z) do { \
+	if ((drvdbg & MDAT_D) || LOG_CTRL(MDAT_D)) \
+		hexdump(MDAT_D, x, y, z); \
+} while (0)
+#define DBG_HEXDUMP_MIF_D(x, y, z) do { \
+	if ((drvdbg & MIF_D)  || LOG_CTRL(MIF_D)) \
+		hexdump(MIF_D, x, y, z); \
+} while (0)
+#define DBG_HEXDUMP_MEVT_D(x, y, z) do { \
+	if ((drvdbg & MEVT_D) || LOG_CTRL(MEVT_D)) \
+		hexdump(MEVT_D, x, y, z); \
+} while (0)
+#define DBG_HEXDUMP_MFW_D(x, y, z) do { \
+	if ((drvdbg & MFW_D)  || LOG_CTRL(MFW_D)) \
+		hexdump(MFW_D, x, y, z); \
+} while (0)
 #define	DBG_HEXDUMP(level, x, y, z)    DBG_HEXDUMP_##level(x, y, z)
 
 #else
@@ -1320,8 +1430,10 @@ hexdump(t_u32 level, char *prompt, t_u8 * buf, int len)
 #endif
 
 #ifdef DEBUG_LEVEL2
-#define HEXDUMP(x, y, z)            do {if ((drvdbg & MINFO) || \
-		LOG_CTRL(MINFO)) hexdump(MINFO, x, y, z); } while (0)
+#define HEXDUMP(x, y, z) do { \
+	if ((drvdbg & MINFO) || LOG_CTRL(MINFO)) \
+		hexdump(MINFO, x, y, z); \
+} while (0)
 #else
 /** Do nothing since debugging is not turned on */
 #define HEXDUMP(x, y, z)            do {} while (0)
@@ -1458,6 +1570,15 @@ typedef struct _HostCmd_DS_802_11_CFG_DATA {
 /** default repeat count */
 #define DEF_REPEAT_COUNT	 6
 
+/** default rssi low threshold */
+#define DEFAULT_RSSI_LOW_THRESHOLD 70
+/** RSSI HYSTERSIS */
+#define RSSI_HYSTERESIS		6
+/** lowest rssi threshold */
+#define LOWEST_RSSI_THRESHOLD	82
+/** delta rssi */
+#define DELTA_RSSI 10
+
 /** NL80211 scan configuration header */
 #define NL80211_SCANCFG_HEADER		"SCAN-CFG "
 /** NL80211 scan configuration header length */
@@ -1538,6 +1659,8 @@ int woal_reg_rx_mgmt_ind(moal_private * priv, t_u16 action,
 /** Set driver debug bit masks */
 int woal_set_drvdbg(moal_private * priv, t_u32 drvdbg);
 #endif
+mlan_status woal_set_get_tx_bf_cap(moal_private * priv, t_u16 action,
+				   t_u32 * tx_bf_cap);
 /** Request MAC address setting */
 mlan_status woal_request_set_mac_address(moal_private * priv);
 /** Request multicast list setting */
@@ -1549,6 +1672,7 @@ mlan_status woal_request_ioctl(moal_private * priv, mlan_ioctl_req * req,
 #ifdef CONFIG_PROC_FS
 mlan_status woal_request_soft_reset(moal_handle * handle);
 #endif
+
 #ifdef PROC_DEBUG
 /** Get debug information */
 mlan_status woal_get_debug_info(moal_private * priv, t_u8 wait_option,
@@ -1798,6 +1922,11 @@ mlan_status woal_set_rssi_threshold(moal_private * priv, t_u32 event_id,
 mlan_status woal_set_bg_scan(moal_private * priv, char *buf, int length);
 mlan_status woal_stop_bg_scan(moal_private * priv, t_u8 wait_option);
 void woal_reconfig_bgscan(moal_handle * handle);
+void woal_config_bgscan_and_rssi(moal_private * priv, t_u8 set_rssi);
+void woal_save_conn_params(moal_private * priv,
+			   struct cfg80211_connect_params *sme);
+void woal_clear_conn_params(moal_private * priv);
+void woal_start_roaming(moal_private * priv);
 mlan_status woal_request_bgscan(moal_private * priv, t_u8 wait_option,
 				wlan_bgscan_cfg * scan_cfg);
 #endif
@@ -1808,6 +1937,7 @@ void wlan_scan_create_brief_table_entry(t_u8 ** ppbuffer,
 int wlan_get_scan_table_ret_entry(BSSDescriptor_t * pbss_desc, t_u8 ** ppbuffer,
 				  int *pspace_left);
 BOOLEAN woal_ssid_valid(mlan_802_11_ssid * pssid);
+int woal_is_connected(moal_private * priv, mlan_ssid_bssid * ssid_bssid);
 int woal_priv_hostcmd(moal_private * priv, t_u8 * respbuf, t_u32 respbuflen);
 void woal_tcp_ack_tx_indication(moal_private * priv, mlan_buffer * pmbuf);
 mlan_status woal_request_country_power_table(moal_private * priv, char *region);

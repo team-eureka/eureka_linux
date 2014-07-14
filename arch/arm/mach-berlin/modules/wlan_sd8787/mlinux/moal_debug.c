@@ -2,7 +2,7 @@
   *
   * @brief This file contains functions for debug proc file.
   *
-  * Copyright (C) 2008-2011, Marvell International Ltd.
+  * Copyright (C) 2008-2014, Marvell International Ltd.
   *
   * This software file (the "File") is distributed by Marvell International
   * Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -93,6 +93,8 @@ static struct debug_data items[] = {
 	 item_addr(is_hs_configured)}
 	,
 	{"hs_activated", item_size(hs_activated), item_addr(hs_activated)}
+	,
+	{"rx_pkts_queued", item_size(rx_pkts_queued), item_addr(rx_pkts_queued)}
 	,
 	{"tx_pkts_queued", item_size(tx_pkts_queued), item_addr(tx_pkts_queued)}
 	,
@@ -288,6 +290,8 @@ static struct debug_data uap_items[] = {
 	 item_addr(is_hs_configured)}
 	,
 	{"hs_activated", item_size(hs_activated), item_addr(hs_activated)}
+	,
+	{"rx_pkts_queued", item_size(rx_pkts_queued), item_addr(rx_pkts_queued)}
 	,
 	{"tx_pkts_queued", item_size(tx_pkts_queued), item_addr(tx_pkts_queued)}
 	,
@@ -1029,10 +1033,10 @@ int woal_peer_mgmt_frame_ioctl(t_u16 mask)
 /**
  *  @brief Proc read function
  *
- *  @param sfp 	   pointer to seq_file structure
+ *  @param sfp     pointer to seq_file structure
  *  @param data
  *
- *  @return 	   Number of output data or MLAN_STATUS_FAILURE
+ *  @return        Number of output data or MLAN_STATUS_FAILURE
  */
 static int
 woal_debug_read(struct seq_file *sfp, void *data)
@@ -1159,29 +1163,27 @@ woal_debug_read(struct seq_file *sfp, void *data)
 			seq_printf(sfp, "\n");
 		}
 	}
-	if (info.tdls_peer_list) {
-		for (i = 0; i < info.tdls_peer_num; i++) {
-			unsigned int j;
-			seq_printf(sfp,
-				   "tdls peer: %02x:%02x:%02x:%02x:%02x:%02x snr=%d nf=%d\n",
-				   info.tdls_peer_list[i].mac_addr[0],
-				   info.tdls_peer_list[i].mac_addr[1],
-				   info.tdls_peer_list[i].mac_addr[2],
-				   info.tdls_peer_list[i].mac_addr[3],
-				   info.tdls_peer_list[i].mac_addr[4],
-				   info.tdls_peer_list[i].mac_addr[5],
-				   info.tdls_peer_list[i].snr,
-				   -info.tdls_peer_list[i].nf);
-			seq_printf(sfp, "htcap: ");
-			for (j = 0; j < sizeof(IEEEtypes_HTCap_t); j++)
-				seq_printf(sfp, "%02x ",
-					   info.tdls_peer_list[i].ht_cap[j]);
-			seq_printf(sfp, "\nExtcap: ");
-			for (j = 0; j < sizeof(IEEEtypes_ExtCap_t); j++)
-				seq_printf(sfp, "%02x ",
-					   info.tdls_peer_list[i].ext_cap[j]);
-			seq_printf(sfp, "\n");
-		}
+	for (i = 0; i < info.tdls_peer_num; i++) {
+		unsigned int j;
+		seq_printf(sfp,
+			   "tdls peer: %02x:%02x:%02x:%02x:%02x:%02x snr=%d nf=%d\n",
+			   info.tdls_peer_list[i].mac_addr[0],
+			   info.tdls_peer_list[i].mac_addr[1],
+			   info.tdls_peer_list[i].mac_addr[2],
+			   info.tdls_peer_list[i].mac_addr[3],
+			   info.tdls_peer_list[i].mac_addr[4],
+			   info.tdls_peer_list[i].mac_addr[5],
+			   info.tdls_peer_list[i].snr,
+			   -info.tdls_peer_list[i].nf);
+		seq_printf(sfp, "htcap: ");
+		for (j = 0; j < sizeof(IEEEtypes_HTCap_t); j++)
+			seq_printf(sfp, "%02x ",
+				   info.tdls_peer_list[i].ht_cap[j]);
+		seq_printf(sfp, "\nExtcap: ");
+		for (j = 0; j < sizeof(IEEEtypes_ExtCap_t); j++)
+			seq_printf(sfp, "%02x ",
+				   info.tdls_peer_list[i].ext_cap[j]);
+		seq_printf(sfp, "\n");
 	}
 exit:
 	MODULE_PUT;
@@ -1192,12 +1194,12 @@ exit:
 /**
  *  @brief Proc write function
  *
- *  @param f	   file pointer
+ *  @param f       file pointer
  *  @param buf     pointer to data buffer
  *  @param count   data number to write
  *  @param off     Offset
  *
- *  @return 	   number of data
+ *  @return        number of data
  */
 static ssize_t
 woal_debug_write(struct file *f, const char __user * buf, size_t count,
@@ -1217,6 +1219,7 @@ woal_debug_write(struct file *f, const char __user * buf, size_t count,
 #ifdef DEBUG_LEVEL1
 	t_u32 last_drvdbg = drvdbg;
 #endif
+	gfp_t flag;
 
 	ENTER();
 
@@ -1224,14 +1227,13 @@ woal_debug_write(struct file *f, const char __user * buf, size_t count,
 		LEAVE();
 		return MLAN_STATUS_FAILURE;
 	}
-
-	pdata = (char *)kmalloc(count + 1, GFP_KERNEL);
+	flag = (in_atomic() || irqs_disabled())? GFP_ATOMIC : GFP_KERNEL;
+	pdata = kzalloc(count + 1, flag);
 	if (pdata == NULL) {
 		MODULE_PUT;
 		LEAVE();
 		return 0;
 	}
-	memset(pdata, 0, count + 1);
 
 	if (copy_from_user(pdata, buf, count)) {
 		PRINTM(MERROR, "Copy from user failed\n");
@@ -1275,18 +1277,9 @@ woal_debug_write(struct file *f, const char __user * buf, size_t count,
 	kfree(pdata);
 
 #ifdef DEBUG_LEVEL1
-	if (last_drvdbg != drvdbg) {
+	if (last_drvdbg != drvdbg)
 		woal_set_drvdbg(priv, drvdbg);
 
-	}
-#endif
-#if 0
-	/* Set debug information */
-	if (woal_set_debug_info(priv, MOAL_PROC_WAIT, &info)) {
-		MODULE_PUT;
-		LEAVE();
-		return 0;
-	}
 #endif
 	MODULE_PUT;
 	LEAVE();
@@ -1337,9 +1330,9 @@ static struct file_operations peers_file_ops = {
 /**
  *  @brief Create debug proc file
  *
- *  @param priv	   A pointer to a moal_private structure
+ *  @param priv    A pointer to a moal_private structure
  *
- *  @return 	   N/A
+ *  @return        N/A
  */
 void
 woal_debug_entry(moal_private * priv)
@@ -1462,9 +1455,9 @@ woal_debug_entry(moal_private * priv)
 /**
  *  @brief Remove proc file
  *
- *  @param priv	 A pointer to a moal_private structure
+ *  @param priv  A pointer to a moal_private structure
  *
- *  @return 	 N/A
+ *  @return      N/A
  */
 void
 woal_debug_remove(moal_private * priv)

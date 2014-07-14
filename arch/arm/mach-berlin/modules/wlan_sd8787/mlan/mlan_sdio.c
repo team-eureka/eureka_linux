@@ -2,20 +2,26 @@
  *
  *  @brief This file contains SDIO specific code
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /********************************************************
@@ -42,8 +48,8 @@ Change log:
 /** FW header length for CRC check disable */
 #define FW_CRC_HEADER_RB   24
 /** FW header for CRC check disable */
-t_u8 fw_crc_header_rb[FW_CRC_HEADER_RB] =
-	{ 0x01, 0x00, 0x00, 0x00, 0x04, 0xfd, 0x00, 0x04,
+static t_u8 fw_crc_header_rb[FW_CRC_HEADER_RB] = {
+	0x01, 0x00, 0x00, 0x00, 0x04, 0xfd, 0x00, 0x04,
 	0x08, 0x00, 0x00, 0x00, 0x26, 0x52, 0x2a, 0x7b,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
@@ -304,7 +310,7 @@ wlan_sdio_poll_card_status(mlan_adapter * pmadapter, t_u8 bits)
  *  @brief This function reads firmware status registers
  *
  *  @param pmadapter    A pointer to mlan_adapter structure
- *  @param dat	        A pointer to keep returned data
+ *  @param dat          A pointer to keep returned data
  *  @return             MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
  */
 static mlan_status
@@ -336,7 +342,7 @@ wlan_sdio_read_fw_status(mlan_adapter * pmadapter, t_u16 * dat)
 /**  @brief This function disables the host interrupts mask.
  *
  *  @param pmadapter    A pointer to mlan_adapter structure
- *  @param mask	        the interrupt mask
+ *  @param mask         the interrupt mask
  *  @return             MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
  */
 static mlan_status
@@ -374,7 +380,7 @@ wlan_sdio_disable_host_int_mask(pmlan_adapter pmadapter, t_u8 mask)
  *  @brief This function enables the host interrupts mask
  *
  *  @param pmadapter A pointer to mlan_adapter structure
- *  @param mask	   the interrupt mask
+ *  @param mask    the interrupt mask
  *  @return        MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
  */
 static mlan_status
@@ -400,7 +406,7 @@ wlan_sdio_enable_host_int_mask(pmlan_adapter pmadapter, t_u8 mask)
 /**
  *  @brief This function reads data from the card.
  *
- *  @param pmadapter 	A pointer to mlan_adapter structure
+ *  @param pmadapter A pointer to mlan_adapter structure
  *  @param type     A pointer to keep type as data or command
  *  @param nb       A pointer to keep the data/cmd length returned in buffer
  *  @param pmbuf    A pointer to the SDIO data/cmd buffer
@@ -457,17 +463,18 @@ exit:
  *  @brief  This function downloads FW blocks to device
  *
  *  @param pmadapter	A pointer to mlan_adapter
- *  @param pmfw			A pointer to firmware image
+ *  @param firmware     A pointer to firmware image
+ *  @param firmwarelen  firmware len
  *
  *  @return             MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
  */
 static mlan_status
-wlan_prog_fw_w_helper(IN pmlan_adapter pmadapter, IN pmlan_fw_image pmfw)
+wlan_prog_fw_w_helper(IN pmlan_adapter pmadapter, t_u8 * fw, t_u32 fw_len)
 {
 	mlan_status ret = MLAN_STATUS_SUCCESS;
 	pmlan_callbacks pcb = &pmadapter->callbacks;
-	t_u8 *firmware = pmfw->pfw_buf;
-	t_u32 firmwarelen = pmfw->fw_len;
+	t_u8 *firmware = fw;
+	t_u32 firmwarelen = fw_len;
 	t_u32 offset = 0;
 	t_u32 base0, base1;
 	t_void *tmpfwbuf = MNULL;
@@ -640,8 +647,8 @@ wlan_prog_fw_w_helper(IN pmlan_adapter pmadapter, IN pmlan_fw_image pmfw)
 			/* Custom header download complete, restore original FW
 			 */
 			offset = 0;
-			firmware = pmfw->pfw_buf;
-			firmwarelen = pmfw->fw_len;
+			firmware = fw;
+			firmwarelen = fw_len;
 			crc_buffer = 0;
 		}
 	} while (MTRUE);
@@ -1035,6 +1042,8 @@ wlan_send_mp_aggr_buf(mlan_adapter * pmadapter)
 	cmd53_port = (pmadapter->ioport | SDIO_MPA_ADDR_BASE |
 		      (pmadapter->mpa_tx.ports << 4)) +
 		pmadapter->mpa_tx.start_port;
+	if (pmadapter->mpa_tx.pkt_cnt == 1)
+		cmd53_port = pmadapter->ioport + pmadapter->mpa_tx.start_port;
 
 	ret = wlan_write_data_sync(pmadapter, &mbuf_aggr, cmd53_port);
 	if (!(pmadapter->mp_wr_bitmap & (1 << pmadapter->curr_wr_port))
@@ -1321,7 +1330,7 @@ wlan_dnld_fw(IN pmlan_adapter pmadapter, IN pmlan_fw_image pmfw)
 	ENTER();
 
 	/* Download the firmware image via helper */
-	ret = wlan_prog_fw_w_helper(pmadapter, pmfw);
+	ret = wlan_prog_fw_w_helper(pmadapter, pmfw->pfw_buf, pmfw->fw_len);
 	if (ret != MLAN_STATUS_SUCCESS) {
 		LEAVE();
 		return MLAN_STATUS_FAILURE;
@@ -1627,7 +1636,7 @@ done:
  *  @brief This function sends data to the card.
  *
  *  @param pmadapter A pointer to mlan_adapter structure
- *  @param type	     data or command
+ *  @param type      data or command
  *  @param pmbuf     A pointer to mlan_buffer (pmbuf->data_len should include SDIO header)
  *  @param tx_param  A pointer to mlan_tx_param
  *  @return          MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE

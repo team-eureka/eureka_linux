@@ -377,11 +377,12 @@ static int shm_driver_release(struct inode *inode, struct file *filp)
 		return 0;
 	}
 
-	/* once the fd released, we should release allocated cache
+	/* once the fd released, we should release allocated cache and noncache
 	 * memory device accordingly to avoid shm leak */
-	if (pDevice == shm_device)
+	if ((pDevice == shm_device) || (pDevice == shm_device_noncache))
+	{
 		shm_device_release_by_taskid(pDevice, taskid);
-
+	}
 	shm_debug("after shm_driver_release OK for pid:%d\n",taskid);
 
 	return 0;

@@ -41,6 +41,8 @@ EXPORT_SYMBOL(mlan_rx_process);
 EXPORT_SYMBOL(mlan_select_wmm_queue);
 EXPORT_SYMBOL(mlan_interrupt);
 
+EXPORT_SYMBOL(mlan_pm_wakeup_card);
+
 EXPORT_SYMBOL(mlan_hist_data_get);
 EXPORT_SYMBOL(mlan_hist_data_clear);
 EXPORT_SYMBOL(mlan_memcpy);
@@ -49,5 +51,5 @@ EXPORT_SYMBOL(mlan_register_peer_mac_cb);
 MODULE_DESCRIPTION("M-WLAN MLAN Driver");
 MODULE_AUTHOR("Marvell International Ltd.");
 MODULE_VERSION(MLAN_RELEASE_VERSION);
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Marvell Proprietary");
 #endif /* LINUX */

@@ -2,20 +2,26 @@
  *
  *  @brief This file contains the handling of AP mode ioctls
  *
- *  Copyright (C) 2009-2011, Marvell International Ltd.
+ *  (C) Copyright 2009-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /********************************************************
@@ -984,6 +990,8 @@ wlan_uap_callback_11h_channel_check_req(IN t_void * priv)
 	mlan_private *pmpriv = (mlan_private *) priv;
 	mlan_callbacks *pcb = (mlan_callbacks *) & pmpriv->adapter->callbacks;
 	wlan_uap_get_info_cb_t *puap_state_chan_cb = &pmpriv->uap_state_chan_cb;
+	Band_Config_t *pband_cfg =
+		(Band_Config_t *) (&puap_state_chan_cb->band_config);
 	/* keep copy as local variable */
 	pmlan_ioctl_req pioctl = puap_state_chan_cb->pioctl_req_curr;
 
@@ -1013,7 +1021,8 @@ wlan_uap_callback_11h_channel_check_req(IN t_void * priv)
 		/* Check for radar on the channel */
 		ret = wlan_11h_issue_radar_detect(pmpriv,
 						  pioctl,
-						  puap_state_chan_cb->channel);
+						  puap_state_chan_cb->channel,
+						  pband_cfg->chanWidth);
 		if (ret == MLAN_STATUS_SUCCESS)
 			ret = MLAN_STATUS_PENDING;
 	} else {
@@ -1292,6 +1301,9 @@ wlan_ops_uap_ioctl(t_void * adapter, pmlan_ioctl_req pioctl_req)
 	mlan_ds_rate *rate = MNULL;
 	mlan_ds_reg_mem *reg_mem = MNULL;
 	mlan_private *pmpriv = pmadapter->priv[pioctl_req->bss_index];
+#if defined(STA_SUPPORT) && defined(UAP_SUPPORT)
+	mlan_ds_scan *pscan;
+#endif
 
 	ENTER();
 
@@ -1328,6 +1340,27 @@ wlan_ops_uap_ioctl(t_void * adapter, pmlan_ioctl_req pioctl_req)
 			status = wlan_bss_ioctl_bss_remove(pmadapter,
 							   pioctl_req);
 		break;
+#if defined(STA_SUPPORT) && defined(UAP_SUPPORT)
+	case MLAN_IOCTL_SCAN:
+		pscan = (mlan_ds_scan *) pioctl_req->pbuf;
+		if ((pscan->sub_command == MLAN_OID_SCAN_NORMAL) &&
+		    (pioctl_req->action == MLAN_ACT_GET)) {
+			PRINTM(MIOCTL, "Get scan table in uap\n");
+			pscan->param.scan_resp.pscan_table =
+				(t_u8 *) pmadapter->pscan_table;
+			pscan->param.scan_resp.num_in_scan_table =
+				pmadapter->num_in_scan_table;
+			pscan->param.scan_resp.age_in_secs =
+				pmadapter->age_in_secs;
+			pioctl_req->data_read_written =
+				sizeof(mlan_scan_resp) + MLAN_SUB_COMMAND_SIZE;
+			pscan->param.scan_resp.pchan_stats =
+				(t_u8 *) pmadapter->pchan_stats;
+			pscan->param.scan_resp.num_in_chan_stats =
+				pmadapter->num_in_chan_stats;
+		}
+		break;
+#endif
 	case MLAN_IOCTL_GET_INFO:
 		pget_info = (mlan_ds_get_info *) pioctl_req->pbuf;
 		if (pget_info->sub_command == MLAN_OID_GET_VER_EXT)
@@ -1351,6 +1384,8 @@ wlan_ops_uap_ioctl(t_void * adapter, pmlan_ioctl_req pioctl_req)
 			pget_info->param.fw_info.fw_bands = pmadapter->fw_bands;
 			pget_info->param.fw_info.hw_dev_mcs_support =
 				pmadapter->hw_dev_mcs_support;
+			pget_info->param.fw_info.hw_dot_11n_dev_cap =
+				pmadapter->hw_dot_11n_dev_cap;
 			pget_info->param.fw_info.region_code =
 				pmadapter->region_code;
 		}

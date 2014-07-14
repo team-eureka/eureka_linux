@@ -2,7 +2,7 @@
   *
   * @brief This file contains uap driver specific defines etc.
   *
-  * Copyright (C) 2009-2011, Marvell International Ltd.
+  * Copyright (C) 2009-2014, Marvell International Ltd.
   *
   * This software file (the "File") is distributed by Marvell International
   * Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -341,6 +341,8 @@ typedef struct _domain_info_param {
 #define MAX_DOMAIN_TLV_LEN      (TLV_HEADER_LEN + COUNTRY_CODE_LEN \
 								+ (SUB_BAND_LEN * MAX_SUB_BANDS))
 
+int woal_set_get_uap_power_mode(moal_private * priv, t_u32 action,
+				mlan_ds_ps_mgmt * ps_mgmt);
 void woal_uap_set_multicast_list(struct net_device *dev);
 int woal_uap_do_ioctl(struct net_device *dev, struct ifreq *req, int cmd);
 int woal_uap_bss_ctrl(moal_private * priv, t_u8 wait_option, int data);

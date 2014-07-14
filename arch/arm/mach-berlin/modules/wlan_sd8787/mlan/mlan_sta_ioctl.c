@@ -2,20 +2,26 @@
  *
  *  @brief This file contains the functions for station ioctl.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
  *
- *  This software file (the "File") is distributed by Marvell International
- *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
- *  (the "License").  You may use, redistribute and/or modify this File in
- *  accordance with the terms and conditions of the License, a copy of which
- *  is available by writing to the Free Software Foundation, Inc.,
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
- *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+ *  MARVELL CONFIDENTIAL
+ *  The source code contained or described herein and all documents related to
+ *  the source code ("Material") are owned by Marvell International Ltd or its
+ *  suppliers or licensors. Title to the Material remains with Marvell
+ *  International Ltd or its suppliers and licensors. The Material contains
+ *  trade secrets and proprietary and confidential information of Marvell or its
+ *  suppliers and licensors. The Material is protected by worldwide copyright
+ *  and trade secret laws and treaty provisions. No part of the Material may be
+ *  used, copied, reproduced, modified, published, uploaded, posted,
+ *  transmitted, distributed, or disclosed in any way without Marvell's prior
+ *  express written permission.
  *
- *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
- *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
- *  this warranty disclaimer.
+ *  No license under any patent, copyright, trade secret or other intellectual
+ *  property right is granted to or conferred upon you by disclosure or delivery
+ *  of the Materials, either expressly, by implication, inducement, estoppel or
+ *  otherwise. Any license under such intellectual property rights must be
+ *  express and approved by Marvell in writing.
+ *
  */
 
 /******************************************************
@@ -282,7 +288,6 @@ wlan_get_info_bss_info(IN pmlan_adapter pmadapter,
 	       pbss_desc->supported_rates,
 	       MIN(sizeof(info->param.bss_info.peer_supp_rates),
 		   sizeof(pbss_desc->supported_rates)));
-
 	pioctl_req->data_read_written =
 		sizeof(mlan_bss_info) + MLAN_SUB_COMMAND_SIZE;
 
@@ -326,6 +331,8 @@ wlan_get_info_ioctl(IN pmlan_adapter pmadapter, IN pmlan_ioctl_req pioctl_req)
 		pget_info->param.fw_info.region_code = pmadapter->region_code;
 		pget_info->param.fw_info.hw_dev_mcs_support =
 			pmadapter->hw_dev_mcs_support;
+		pget_info->param.fw_info.hw_dot_11n_dev_cap =
+			pmadapter->hw_dot_11n_dev_cap;
 		break;
 	case MLAN_OID_GET_BSS_INFO:
 		status = wlan_get_info_bss_info(pmadapter, pioctl_req);
@@ -488,8 +495,8 @@ wlan_radio_ioctl_band_cfg(IN pmlan_adapter pmadapter,
 		pmadapter->chan_bandwidth =
 			(t_u8) radio_cfg->param.band_cfg.sec_chan_offset;
 		/*
-		 * If no adhoc_channel is supplied verify if the existing adhoc channel
-		 * compiles with new adhoc_band
+		 * If no adhoc_channel is supplied verify if the existing
+		 * adhoc channel compiles with new adhoc_band
 		 */
 		if (!adhoc_channel) {
 			if (!wlan_find_cfp_by_band_and_channel
@@ -1417,6 +1424,7 @@ wlan_bss_ioctl_find_bss(IN pmlan_adapter pmadapter,
 			return MLAN_STATUS_PENDING;
 		}
 	}
+
 	ret = wlan_find_bss(pmpriv, pioctl_req);
 
 	LEAVE();
@@ -2395,6 +2403,43 @@ wlan_set_wpa_ie_helper(mlan_private * priv, t_u8 * ie_data_ptr, t_u16 ie_len)
 }
 
 /**
+ *  @brief Set OSEN IE
+ *
+ *  @param priv         A pointer to mlan_private structure
+ *  @param ie_data_ptr  A pointer to IE
+ *  @param ie_len       Length of the IE
+ *
+ *  @return             MLAN_STATUS_SUCCESS --success, otherwise fail
+ */
+static mlan_status
+wlan_set_osen_ie(mlan_private * priv, t_u8 * ie_data_ptr, t_u16 ie_len)
+{
+	ENTER();
+	if (ie_len) {
+		if (ie_len > sizeof(priv->osen_ie)) {
+			PRINTM(MWARN, "failed to copy, WAPI IE is too big\n");
+			LEAVE();
+			return MLAN_STATUS_FAILURE;
+		}
+		memcpy(priv->adapter, priv->osen_ie, ie_data_ptr, ie_len);
+		priv->osen_ie_len = (t_u8) ie_len;
+		PRINTM(MIOCTL, "Set osen_ie_len=%d IE=%#x\n", priv->osen_ie_len,
+		       priv->osen_ie[0]);
+		DBG_HEXDUMP(MCMD_D, "osen_ie", priv->osen_ie,
+			    priv->osen_ie_len);
+		priv->sec_info.osen_enabled = MTRUE;
+	} else {
+		memset(priv->adapter, priv->osen_ie, 0, sizeof(priv->osen_ie));
+		priv->osen_ie_len = (t_u8) ie_len;
+		PRINTM(MINFO, "Reset osen_ie_len=%d IE=%#x\n",
+		       priv->osen_ie_len, priv->osen_ie[0]);
+		priv->sec_info.osen_enabled = MFALSE;
+	}
+	LEAVE();
+	return MLAN_STATUS_SUCCESS;
+}
+
+/**
  *  @brief Set WAPI IE
  *
  *  @param priv         A pointer to mlan_private structure
@@ -2555,9 +2600,9 @@ wlan_sec_ioctl_auth_mode(IN pmlan_adapter pmadapter,
 	sec = (mlan_ds_sec_cfg *) pioctl_req->pbuf;
 	if (pioctl_req->action == MLAN_ACT_GET)
 		sec->param.auth_mode = pmpriv->sec_info.authentication_mode;
-	else {
+	else
 		pmpriv->sec_info.authentication_mode = sec->param.auth_mode;
-	}
+
 	pioctl_req->data_read_written = sizeof(t_u32) + MLAN_SUB_COMMAND_SIZE;
 	LEAVE();
 	return ret;
@@ -2582,9 +2627,9 @@ wlan_sec_ioctl_encrypt_mode(IN pmlan_adapter pmadapter,
 	sec = (mlan_ds_sec_cfg *) pioctl_req->pbuf;
 	if (pioctl_req->action == MLAN_ACT_GET)
 		sec->param.encrypt_mode = pmpriv->sec_info.encryption_mode;
-	else {
+	else
 		pmpriv->sec_info.encryption_mode = sec->param.encrypt_mode;
-	}
+
 	pioctl_req->data_read_written = sizeof(t_u32) + MLAN_SUB_COMMAND_SIZE;
 	LEAVE();
 	return ret;
@@ -2678,6 +2723,17 @@ wlan_sec_ioctl_set_wep_key(IN pmlan_adapter pmadapter,
 		sec->param.encrypt_key.key_index = index;
 	} else {
 		if (sec->param.encrypt_key.key_index >= MRVL_NUM_WEP_KEY) {
+			if ((sec->param.encrypt_key.key_remove == MTRUE) &&
+			    (sec->param.encrypt_key.key_index <= 5)) {
+				/* call firmware remove key */
+				ret = wlan_prepare_cmd(pmpriv,
+						       HostCmd_CMD_802_11_KEY_MATERIAL,
+						       HostCmd_ACT_GEN_SET,
+						       0,
+						       MNULL,
+						       &sec->param.encrypt_key);
+				goto exit;
+			}
 			PRINTM(MERROR, "Key_index is invalid\n");
 			ret = MLAN_STATUS_FAILURE;
 			goto exit;
@@ -3047,6 +3103,44 @@ wlan_sec_ioctl_encrypt_key(IN pmlan_adapter pmadapter,
 }
 
 /**
+ *  @brief Query Encrpyt key
+ *
+ *  @param pmadapter    A pointer to mlan_adapter structure
+ *  @param pioctl_req   A pointer to ioctl request buffer
+ *
+ *  @return     MLAN_STATUS_PENDING --success, otherwise fail
+ */
+static mlan_status
+wlan_sec_ioctl_query_key(IN pmlan_adapter pmadapter,
+			 IN pmlan_ioctl_req pioctl_req)
+{
+	mlan_status ret = MLAN_STATUS_SUCCESS;
+	mlan_private *pmpriv = pmadapter->priv[pioctl_req->bss_index];
+	mlan_ds_sec_cfg *sec = MNULL;
+
+	ENTER();
+
+	sec = (mlan_ds_sec_cfg *) pioctl_req->pbuf;
+	/* Current driver only supports get PTK/GTK */
+	if (pmpriv->port_open && (pmpriv->sec_info.wpa_enabled
+				  || pmpriv->sec_info.wpa2_enabled
+				  || pmpriv->sec_info.wapi_enabled)) {
+		/* Send request to firmware */
+		ret = wlan_prepare_cmd(pmpriv,
+				       HostCmd_CMD_802_11_KEY_MATERIAL,
+				       HostCmd_ACT_GEN_GET,
+				       KEY_INFO_ENABLED,
+				       (t_void *) pioctl_req,
+				       &sec->param.encrypt_key);
+
+		if (ret == MLAN_STATUS_SUCCESS)
+			ret = MLAN_STATUS_PENDING;
+	}
+	LEAVE();
+	return ret;
+}
+
+/**
  *  @brief Set/Get WPA passphrase for esupplicant
  *
  *  @param pmadapter	A pointer to mlan_adapter structure
@@ -3064,7 +3158,6 @@ wlan_sec_ioctl_passphrase(IN pmlan_adapter pmadapter,
 	t_u16 cmd_action = 0;
 	BSSDescriptor_t *pbss_desc;
 	int i = 0;
-
 	ENTER();
 
 	sec = (mlan_ds_sec_cfg *) pioctl_req->pbuf;
@@ -3268,6 +3361,9 @@ wlan_sec_cfg_ioctl(IN pmlan_adapter pmadapter, IN pmlan_ioctl_req pioctl_req)
 	case MLAN_OID_SEC_CFG_ENCRYPT_KEY:
 		status = wlan_sec_ioctl_encrypt_key(pmadapter, pioctl_req);
 		break;
+	case MLAN_OID_SEC_QUERY_KEY:
+		status = wlan_sec_ioctl_query_key(pmadapter, pioctl_req);
+		break;
 	case MLAN_OID_SEC_CFG_PASSPHRASE:
 		status = wlan_sec_ioctl_passphrase(pmadapter, pioctl_req);
 		break;
@@ -3312,6 +3408,7 @@ wlan_set_gen_ie_helper(mlan_private * priv, t_u8 * ie_data_ptr, t_u16 ie_len)
 	IEEEtypes_VendorHeader_t *pvendor_ie;
 	const t_u8 wpa_oui[] = { 0x00, 0x50, 0xf2, 0x01 };
 	const t_u8 wps_oui[] = { 0x00, 0x50, 0xf2, 0x04 };
+	const t_u8 osen_oui[] = { 0x50, 0x6f, 0x9a, 0x12 };
 
 	ENTER();
 
@@ -3321,6 +3418,7 @@ wlan_set_gen_ie_helper(mlan_private * priv, t_u8 * ie_data_ptr, t_u16 ie_len)
 		priv->wps.session_enable = MFALSE;
 		wlan_set_wpa_ie_helper(priv, MNULL, 0);
 		wlan_set_wapi_ie(priv, MNULL, 0);
+		wlan_set_osen_ie(priv, MNULL, 0);
 	} else if (!ie_data_ptr) {
 		/* MNULL check */
 		ret = MLAN_STATUS_FAILURE;
@@ -3342,6 +3440,13 @@ wlan_set_gen_ie_helper(mlan_private * priv, t_u8 * ie_data_ptr, t_u16 ie_len)
 		} else if (pvendor_ie->element_id == WAPI_IE) {
 			/* IE is a WAPI IE so call set_wapi function */
 			ret = wlan_set_wapi_ie(priv, ie_data_ptr, ie_len);
+		} else if ((pvendor_ie->element_id == VENDOR_SPECIFIC_221) &&
+			   (!memcmp
+			    (priv->adapter, pvendor_ie->oui, osen_oui,
+			     sizeof(osen_oui)))) {
+			/* IE is a OSEN IE so call set_osen function */
+			ret = wlan_set_osen_ie(priv, ie_data_ptr, ie_len);
+
 		} else if ((pvendor_ie->element_id == WPS_IE) &&
 			   (priv->wps.session_enable == MFALSE) &&
 			   (!memcmp
@@ -3349,7 +3454,8 @@ wlan_set_gen_ie_helper(mlan_private * priv, t_u8 * ie_data_ptr, t_u16 ie_len)
 			     sizeof(wps_oui)))) {
 			/*
 			 * Discard first two byte (Element ID and Length)
-			 * because they are not needed in the case of setting WPS_IE
+			 * because they are not needed in the case of setting
+			 * WPS_IE
 			 */
 			if (pvendor_ie->len > 4) {
 				memcpy(priv->adapter,
@@ -3366,8 +3472,8 @@ wlan_set_gen_ie_helper(mlan_private * priv, t_u8 * ie_data_ptr, t_u16 ie_len)
 			}
 		} else {
 			/*
-			 * Verify that the passed length is not larger than the available
-			 * space remaining in the buffer
+			 * Verify that the passed length is not larger than
+			 * the available space remaining in the buffer
 			 */
 			if (ie_len <
 			    (sizeof(priv->gen_ie_buf) - priv->gen_ie_buf_len)) {
@@ -3705,6 +3811,7 @@ wlan_11h_channel_check_req(IN pmlan_adapter pmadapter,
 {
 	pmlan_private pmpriv = MNULL;
 	mlan_status ret = MLAN_STATUS_FAILURE;
+	t_u8 chan_width = CHAN_BW_20MHZ;
 
 	ENTER();
 
@@ -3743,9 +3850,14 @@ wlan_11h_channel_check_req(IN pmlan_adapter pmadapter,
 			ret = wlan_11h_check_update_radar_det_state(pmpriv);
 
 			/* Check for radar on the channel */
+			if ((pmadapter->chan_bandwidth ==
+			     CHANNEL_BW_40MHZ_ABOVE) ||
+			    (pmadapter->chan_bandwidth ==
+			     CHANNEL_BW_40MHZ_BELOW))
+				chan_width = CHAN_BW_40MHZ;
 			ret = wlan_11h_issue_radar_detect(pmpriv, pioctl_req,
-							  pmpriv->
-							  adhoc_channel);
+							  pmpriv->adhoc_channel,
+							  chan_width);
 			if (ret == MLAN_STATUS_SUCCESS)
 				ret = MLAN_STATUS_PENDING;
 		}
@@ -4826,6 +4938,38 @@ done:
 }
 
 /**
+ *  @brief Configure MFPC and MFPR for management frame protection
+ *
+ *  @param pmadapter    A pointer to mlan_adapter structure
+ *  @param pioctl_req   Pointer to the IOCTL request buffer
+ *
+ *  @return             MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
+ */
+mlan_status
+wlan_misc_pmfcfg(IN pmlan_adapter pmadapter, IN mlan_ioctl_req * pioctl_req)
+{
+	pmlan_private pmpriv = pmadapter->priv[pioctl_req->bss_index];
+	mlan_status ret = MLAN_STATUS_SUCCESS;
+	mlan_ds_misc_cfg *cfg_misc = MNULL;
+	mlan_ds_misc_pmfcfg *pmfcfg;
+
+	cfg_misc = (mlan_ds_misc_cfg *) pioctl_req->pbuf;
+	pmfcfg = &cfg_misc->param.pmfcfg;
+
+	if (pioctl_req->action == MLAN_ACT_SET) {
+		pmpriv->pmfcfg.mfpc = pmfcfg->mfpc;
+		pmpriv->pmfcfg.mfpr = pmfcfg->mfpr;
+	} else {
+		/* GET operation */
+		pmfcfg->mfpc = pmpriv->pmfcfg.mfpc;
+		pmfcfg->mfpr = pmpriv->pmfcfg.mfpr;
+	}
+
+	LEAVE();
+	return ret;
+}
+
+/**
  *  @brief Miscellaneous configuration handler
  *
  *  @param pmadapter	A pointer to mlan_adapter structure
@@ -4888,6 +5032,10 @@ wlan_misc_cfg_ioctl(IN pmlan_adapter pmadapter, IN pmlan_ioctl_req pioctl_req)
 	case MLAN_OID_MISC_SOFT_RESET:
 		status = wlan_misc_ioctl_soft_reset(pmadapter, pioctl_req);
 		break;
+	case MLAN_OID_MISC_COALESCING_STATUS:
+		status = wlan_misc_ioctl_coalescing_status(pmadapter,
+							   pioctl_req);
+		break;
 	case MLAN_OID_MISC_CUSTOM_IE:
 		status = wlan_misc_ioctl_custom_ie_list(pmadapter, pioctl_req,
 							MTRUE);
@@ -4931,6 +5079,9 @@ wlan_misc_cfg_ioctl(IN pmlan_adapter pmadapter, IN pmlan_ioctl_req pioctl_req)
 	case MLAN_OID_MISC_SUBSCRIBE_EVENT:
 		status = wlan_misc_ioctl_subscribe_evt(pmadapter, pioctl_req);
 		break;
+	case MLAN_OID_MISC_HOTSPOT_CFG:
+		status = wlan_misc_hotspot_cfg(pmadapter, pioctl_req);
+		break;
 	case MLAN_OID_MISC_OTP_USER_DATA:
 		status = wlan_misc_otp_user_data(pmadapter, pioctl_req);
 		break;
@@ -4942,6 +5093,9 @@ wlan_misc_cfg_ioctl(IN pmlan_adapter pmadapter, IN pmlan_ioctl_req pioctl_req)
 		status = wlan_misc_ext_capa_cfg(pmadapter, pioctl_req);
 		break;
 #endif
+	case MLAN_OID_MISC_PMFCFG:
+		status = wlan_misc_pmfcfg(pmadapter, pioctl_req);
+		break;
 	default:
 		if (pioctl_req)
 			pioctl_req->status_code = MLAN_ERROR_IOCTL_INVALID;
@@ -5147,6 +5301,10 @@ start_config:
 				pioctl_req->data_read_written =
 					sizeof(mlan_scan_resp) +
 					MLAN_SUB_COMMAND_SIZE;
+				pscan->param.scan_resp.pchan_stats =
+					(t_u8 *) pmadapter->pchan_stats;
+				pscan->param.scan_resp.num_in_chan_stats =
+					pmadapter->num_in_chan_stats;
 			}
 		}
 	}
@@ -5265,7 +5423,7 @@ wlan_find_bss(mlan_private * pmpriv, pmlan_ioctl_req pioctl_req)
 /**
  *  @brief MLAN station ioctl handler
  *
- *  @param adapter 	A pointer to mlan_adapter structure
+ *  @param adapter  A pointer to mlan_adapter structure
  *  @param pioctl_req	A pointer to ioctl request buffer
  *
  *  @return		MLAN_STATUS_SUCCESS/MLAN_STATUS_PENDING --success, otherwise fail
