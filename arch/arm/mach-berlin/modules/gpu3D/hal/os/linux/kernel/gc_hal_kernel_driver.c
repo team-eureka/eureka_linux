@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -20,12 +20,20 @@
 
 
 
-
 #include <linux/device.h>
 #include <linux/slab.h>
 
 #include "gc_hal_kernel_linux.h"
 #include "gc_hal_driver.h"
+/*####modified for marvell-bg2*/
+#if USE_GALOIS_SHM
+#include "shm_api.h"
+#endif
+
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
+/*####end for marvell-bg2*/
 
 #if USE_PLATFORM_DRIVER
 #   include <linux/platform_device.h>
@@ -40,57 +48,83 @@
 /* Zone used for header/footer. */
 #define _GC_OBJ_ZONE    gcvZONE_DRIVER
 
-//####modified for marvell-bg2
-MODULE_DESCRIPTION("Vivante 3D Graphics Driver");
-//####end for marvell-bg2
+MODULE_DESCRIPTION("Vivante Graphics Driver");
 MODULE_LICENSE("GPL");
 
 static struct class* gpuClass;
 
-static gckGALDEVICE galDevice;
+gckGALDEVICE galDevice;
 
-static int major = 199;
-module_param(major, int, 0644);
+static uint major = 199;
+module_param(major, uint, 0644);
 
-//####modified for marvell-bg2
-static int irqLine = 37; //BG2 GC1000
-static long registerMemBase = 0xf7bc0000; //BG2 GC1000
-//static int irqLine = -1;
+/*####modified for marvell-bg2*/
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+#if SOC_BERLIN2CDP
+static int irqLine3D0 = 52;
+#else
+static int irqLine = 37;
+#endif
+module_param(irqLine3D0, int, 0644);
+
+static ulong registerMemBase3D0 = 0xf7bc0000;
+module_param(registerMemBase3D0, ulong, 0644);
+
+static ulong registerMemSize3D0 = 2 << 10;
+module_param(registerMemSize3D0, ulong, 0644);
+
+static int irqLine3D1 = -1;
+module_param(irqLine3D1, int, 0644);
+
+static ulong registerMemBase3D1 = 0;
+module_param(registerMemBase3D1, ulong, 0644);
+
+static ulong registerMemSize3D1 = 2 << 10;
+module_param(registerMemSize3D1, ulong, 0644);
+#else
+#if SOC_BERLIN2CDP
+static int irqLine = 52;
+#else
+static int irqLine = 37;
+#endif
 module_param(irqLine, int, 0644);
 
-//static long registerMemBase = 0x80000000;
-module_param(registerMemBase, long, 0644);
-//####end for marvell-bg2
+static ulong registerMemBase = 0xf7bc0000;
+module_param(registerMemBase, ulong, 0644);
 
-static ulong registerMemSize = 256 << 10;
+static ulong registerMemSize = 2 << 10;
 module_param(registerMemSize, ulong, 0644);
+#endif
+/*####end for marvell-bg2*/
 
 static int irqLine2D = -1;
 module_param(irqLine2D, int, 0644);
 
-static long registerMemBase2D = 0x00000000;
-module_param(registerMemBase2D, long, 0644);
+static ulong registerMemBase2D = 0x00000000;
+module_param(registerMemBase2D, ulong, 0644);
 
-static ulong registerMemSize2D = 256 << 10;
+static ulong registerMemSize2D = 2 << 10;
 module_param(registerMemSize2D, ulong, 0644);
 
 static int irqLineVG = -1;
 module_param(irqLineVG, int, 0644);
 
-static long registerMemBaseVG = 0x00000000;
-module_param(registerMemBaseVG, long, 0644);
+static ulong registerMemBaseVG = 0x00000000;
+module_param(registerMemBaseVG, ulong, 0644);
 
-static ulong registerMemSizeVG = 256 << 10;
+static ulong registerMemSizeVG = 2 << 10;
 module_param(registerMemSizeVG, ulong, 0644);
 
-static long contiguousSize = 4 << 20;
-module_param(contiguousSize, long, 0644);
+/*####modified for marvell-bg2*/
+static ulong contiguousSize = 512;
+/*####end for marvell-bg2*/
+module_param(contiguousSize, ulong, 0644);
 
 static ulong contiguousBase = 0;
 module_param(contiguousBase, ulong, 0644);
 
-static long bankSize = 32 << 20;
-module_param(bankSize, long, 0644);
+static ulong bankSize = 0;
+module_param(bankSize, ulong, 0644);
 
 static int fastClear = -1;
 module_param(fastClear, int, 0644);
@@ -98,27 +132,63 @@ module_param(fastClear, int, 0644);
 static int compression = -1;
 module_param(compression, int, 0644);
 
+static int powerManagement = 1;
+module_param(powerManagement, int, 0644);
+
+static int gpuProfiler = 0;
+module_param(gpuProfiler, int, 0644);
+
 static int signal = 48;
 module_param(signal, int, 0644);
 
 static ulong baseAddress = 0;
 module_param(baseAddress, ulong, 0644);
 
-static ulong physSize = 0;
+/*####modified for marvell-bg2*/
+static ulong physSize = 0x80000000;
 module_param(physSize, ulong, 0644);
+/*####end for marvell-bg2*/
 
-//####modified for marvell-bg2
+static uint logFileSize = 0;
+module_param(logFileSize,uint, 0644);
+
+static uint recovery = 1;
+module_param(recovery, uint, 0644);
+MODULE_PARM_DESC(recovery, "Recover GPU from stuck (1: Enable, 0: Disable)");
+
+/* Middle needs about 40KB buffer, Maximal may need more than 200KB buffer. */
+static uint stuckDump = 1;
+module_param(stuckDump, uint, 0644);
+MODULE_PARM_DESC(stuckDump, "Level of stuck dump content (1: Minimal, 2: Middle, 3: Maximal)");
+
+/*####modified for marvell-bg2*/
 static int showArgs = 1;
-//####end for marvell-bg2
 module_param(showArgs, int, 0644);
 
-//####modified for marvell-bg2
 int debugSHM = 0;
 module_param(debugSHM, int, 0644);
 
-int maxSHMSize = 419430400;    //set to 400MB which means not in use
+int maxSHMSize = 536870912;    /* set to 512MB */
 module_param(maxSHMSize, int, 0644);
-//####end for marvell-bg2
+
+ulong coreClkRegister2D = 0;
+module_param(coreClkRegister2D, ulong, 0644);
+
+ulong coreClkRegister3D = 0;
+module_param(coreClkRegister3D, ulong, 0644);
+
+ulong sysClkRegister3D = 0;
+module_param(sysClkRegister3D, ulong, 0644);
+
+ulong coreClkBitfield2D = 0;
+module_param(coreClkBitfield2D, ulong, 0644);
+
+ulong coreClkBitfield3D = 0;
+module_param(coreClkBitfield3D, ulong, 0644);
+
+ulong sysClkBitfield3D = 0;
+module_param(sysClkBitfield3D, ulong, 0644);
+/*####end for marvell-bg2*/
 
 #if ENABLE_GPU_CLOCK_BY_DRIVER
     unsigned long coreClock = 156000000;
@@ -148,11 +218,70 @@ static int drv_mmap(
 
 static struct file_operations driver_fops =
 {
+    .owner      = THIS_MODULE,
     .open       = drv_open,
     .release    = drv_release,
     .unlocked_ioctl = drv_ioctl,
+#ifdef HAVE_COMPAT_IOCTL
+    .compat_ioctl = drv_ioctl,
+#endif
     .mmap       = drv_mmap,
 };
+
+void
+gckOS_DumpParam(
+    void
+    )
+{
+    printk("gal3d options:\n");
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+    printk("  irqLine3D0         = %d\n",      irqLine3D0);
+    printk("  registerMemBase3D0 = 0x%08lX\n", registerMemBase3D0);
+    printk("  registerMemSize3D0 = 0x%08lX\n", registerMemSize3D0);
+
+    if (irqLine3D1 != -1)
+    {
+        printk("  irqLine3D1         = %d\n",      irqLine3D1);
+        printk("  registerMemBase3D1 = 0x%08lX\n", registerMemBase3D1);
+        printk("  registerMemSize3D1 = 0x%08lX\n", registerMemSize3D1);
+    }
+#else
+    printk("  irqLine           = %d\n",      irqLine);
+    printk("  registerMemBase   = 0x%08lX\n", registerMemBase);
+    printk("  registerMemSize   = 0x%08lX\n", registerMemSize);
+#endif
+
+    if (irqLine2D != -1)
+    {
+        printk("  irqLine2D         = %d\n",      irqLine2D);
+        printk("  registerMemBase2D = 0x%08lX\n", registerMemBase2D);
+        printk("  registerMemSize2D = 0x%08lX\n", registerMemSize2D);
+    }
+
+    if (irqLineVG != -1)
+    {
+        printk("  irqLineVG         = %d\n",      irqLineVG);
+        printk("  registerMemBaseVG = 0x%08lX\n", registerMemBaseVG);
+        printk("  registerMemSizeVG = 0x%08lX\n", registerMemSizeVG);
+    }
+
+    printk("  contiguousSize    = %ld\n",     contiguousSize);
+    printk("  contiguousBase    = 0x%08lX\n", contiguousBase);
+    printk("  bankSize          = 0x%08lX\n", bankSize);
+    printk("  fastClear         = %d\n",      fastClear);
+    printk("  compression       = %d\n",      compression);
+    printk("  signal            = %d\n",      signal);
+    printk("  powerManagement   = %d\n",      powerManagement);
+    printk("  baseAddress       = 0x%08lX\n", baseAddress);
+    printk("  physSize          = 0x%08lX\n", physSize);
+    printk("  logFileSize       = %d KB \n",  logFileSize);
+    printk("  recovery          = %d\n",      recovery);
+    printk("  stuckDump         = %d\n",      stuckDump);
+#if ENABLE_GPU_CLOCK_BY_DRIVER
+    printk("  coreClock         = %lu\n",     coreClock);
+#endif
+    printk("  gpuProfiler       = %d\n",      gpuProfiler);
+}
 
 int drv_open(
     struct inode* inode,
@@ -196,7 +325,7 @@ int drv_open(
     gcmkONERROR(gckOS_GetProcessID(&data->pidOpen));
 
     /* Attached the process. */
-    for (i = 0; i < gcdCORE_COUNT; i++)
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {
         if (galDevice->kernels[i] != gcvNULL)
         {
@@ -207,25 +336,14 @@ int drv_open(
 
     if (!galDevice->contiguousMapped)
     {
-        gcmkONERROR(gckOS_MapMemory(
-            galDevice->os,
-            galDevice->contiguousPhysical,
-            galDevice->contiguousSize,
-            &data->contiguousLogical
-            ));
-
-        for (i = 0; i < gcdCORE_COUNT; i++)
+        if (galDevice->contiguousPhysical != gcvNULL)
         {
-            if (galDevice->kernels[i] != gcvNULL)
-            {
-                gcmkVERIFY_OK(gckKERNEL_AddProcessDB(
-                    galDevice->kernels[i],
-                    data->pidOpen,
-                    gcvDB_MAP_MEMORY,
-                    data->contiguousLogical,
-                    galDevice->contiguousPhysical,
-                    galDevice->contiguousSize));
-            }
+            gcmkONERROR(gckOS_MapMemory(
+                galDevice->os,
+                galDevice->contiguousPhysical,
+                galDevice->contiguousSize,
+                &data->contiguousLogical
+                ));
         }
     }
 
@@ -253,7 +371,7 @@ OnError:
 
     if (attached)
     {
-        for (i = 0; i < gcdCORE_COUNT; i++)
+        for (i = 0; i < gcdMAX_GPU_COUNT; i++)
         {
             if (galDevice->kernels[i] != gcvNULL)
             {
@@ -275,8 +393,6 @@ int drv_release(
     gcsHAL_PRIVATE_DATA_PTR data;
     gckGALDEVICE device;
     gctINT i;
-    gctUINT32 processID;
-
 
     gcmkHEADER_ARG("inode=0x%08X filp=0x%08X", inode, filp);
 
@@ -321,7 +437,6 @@ int drv_release(
     {
         if (data->contiguousLogical != gcvNULL)
         {
-            gcmkVERIFY_OK(gckOS_GetProcessID(&processID));
             gcmkONERROR(gckOS_UnmapMemoryEx(
                 galDevice->os,
                 galDevice->contiguousPhysical,
@@ -330,27 +445,12 @@ int drv_release(
                 data->pidOpen
                 ));
 
-            for (i = 0; i < gcdCORE_COUNT; i++)
-            {
-                if (galDevice->kernels[i] != gcvNULL)
-                {
-                    gcmkVERIFY_OK(
-                         gckKERNEL_RemoveProcessDB(galDevice->kernels[i],
-                                                   processID, gcvDB_MAP_MEMORY,
-                                                   data->contiguousLogical));
-                }
-            }
-
             data->contiguousLogical = gcvNULL;
         }
     }
 
-    /* Clean user signals if exit unnormally. */
-    gcmkVERIFY_OK(gckOS_GetProcessID(&processID));
-    gcmkVERIFY_OK(gckOS_CleanProcessSignal(galDevice->os, (gctHANDLE)processID));
-
     /* A process gets detached. */
-    for (i = 0; i < gcdCORE_COUNT; i++)
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {
         if (galDevice->kernels[i] != gcvNULL)
         {
@@ -383,6 +483,7 @@ long drv_ioctl(
     gckGALDEVICE device;
     gcsHAL_PRIVATE_DATA_PTR data;
     gctINT32 i, count;
+    gckVIDMEM_NODE nodeObject;
 
     gcmkHEADER_ARG(
         "filp=0x%08X ioctlCode=0x%08X arg=0x%08X",
@@ -471,7 +572,7 @@ long drv_ioctl(
     }
 
     copyLen = copy_from_user(
-        &iface, drvArgs.InputBuffer, sizeof(gcsHAL_INTERFACE)
+        &iface, gcmUINT64_TO_PTR(drvArgs.InputBuffer), sizeof(gcsHAL_INTERFACE)
         );
 
     if (copyLen != 0)
@@ -488,7 +589,7 @@ long drv_ioctl(
     if (iface.command == gcvHAL_CHIP_INFO)
     {
         count = 0;
-        for (i = 0; i < gcdCORE_COUNT; i++)
+        for (i = 0; i < gcdMAX_GPU_COUNT; i++)
         {
             if (device->kernels[i] != gcvNULL)
             {
@@ -508,11 +609,11 @@ long drv_ioctl(
         }
 
         iface.u.ChipInfo.count = count;
-        status = gcvSTATUS_OK;
+        iface.status = status = gcvSTATUS_OK;
     }
     else
     {
-        if (iface.hardwareType < 0 || iface.hardwareType > 7)
+        if (iface.hardwareType > 7)
         {
             gcmkTRACE_ZONE(
                 gcvLEVEL_ERROR, gcvZONE_DRIVER,
@@ -523,24 +624,6 @@ long drv_ioctl(
 
             gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
         }
-
-//####modified for marvell-bg2
-#if !USE_GALOIS_SHM
-        if (iface.command == gcvHAL_CACHE){
-            if ((data->mappedMemory != gcvNULL)&& (iface.u.Cache.node)
-            &&  (iface.u.Cache.node->VidMem.memory->object.type == gcvOBJ_VIDMEM)
-            ){
-                gctUINT32 offset;
-
-                offset = (gctUINT8 *) iface.u.Cache.logical - (gctUINT8 *) data->mappedMemory;
-                iface.u.Cache.physical = (gctUINT8 *) device->contiguousPhysical+offset;
-            }
-            else{
-                iface.u.Cache.physical = NULL;
-            }
-        }
-#endif
-//####end for marvell-bg2
 
 #if gcdENABLE_VG
         if (device->coreMapping[iface.hardwareType] == gcvCORE_VG)
@@ -567,25 +650,36 @@ long drv_ioctl(
 
     if (gcmIS_SUCCESS(status) && (iface.command == gcvHAL_LOCK_VIDEO_MEMORY))
     {
+        gcuVIDMEM_NODE_PTR node;
+        gctUINT32 processID;
+
+        gckOS_GetProcessID(&processID);
+
+        gcmkONERROR(gckVIDMEM_HANDLE_Lookup(device->kernels[device->coreMapping[iface.hardwareType]],
+                                processID,
+                                (gctUINT32)iface.u.LockVideoMemory.node,
+                                &nodeObject));
+        node = nodeObject->node;
+
         /* Special case for mapped memory. */
         if ((data->mappedMemory != gcvNULL)
-        &&  (iface.u.LockVideoMemory.node->VidMem.memory->object.type == gcvOBJ_VIDMEM)
+        &&  (node->VidMem.memory->object.type == gcvOBJ_VIDMEM)
         )
         {
             /* Compute offset into mapped memory. */
             gctUINT32 offset
-                = (gctUINT8 *) iface.u.LockVideoMemory.memory
+                = (gctUINT8 *) gcmUINT64_TO_PTR(iface.u.LockVideoMemory.memory)
                 - (gctUINT8 *) device->contiguousBase;
 
             /* Compute offset into user-mapped region. */
             iface.u.LockVideoMemory.memory =
-                (gctUINT8 *) data->mappedMemory + offset;
+                gcmPTR_TO_UINT64((gctUINT8 *) data->mappedMemory + offset);
         }
     }
 
     /* Copy data back to the user. */
     copyLen = copy_to_user(
-        drvArgs.OutputBuffer, &iface, sizeof(gcsHAL_INTERFACE)
+        gcmUINT64_TO_PTR(drvArgs.OutputBuffer), &iface, sizeof(gcsHAL_INTERFACE)
         );
 
     if (copyLen != 0)
@@ -613,7 +707,7 @@ static int drv_mmap(
     struct vm_area_struct* vma
     )
 {
-    gceSTATUS status;
+    gceSTATUS status = gcvSTATUS_OK;
     gcsHAL_PRIVATE_DATA_PTR data;
     gckGALDEVICE device;
 
@@ -658,34 +752,36 @@ static int drv_mmap(
 
 #if !gcdPAGED_MEMORY_CACHEABLE
     vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
-    vma->vm_flags    |= VM_IO | VM_DONTCOPY | VM_DONTEXPAND;
+    vma->vm_flags    |= gcdVM_FLAGS;
 #endif
     vma->vm_pgoff     = 0;
 
     if (device->contiguousMapped)
     {
         unsigned long size = vma->vm_end - vma->vm_start;
-//####modified for marvell-bg2
-        int ret;
+        int ret = 0;
 
-        if (size > device->contiguousSize) {
+/*####modified for marvell-bg2*/
+        if (size > device->contiguousSize)
+        {
             gcmkTRACE_ZONE(
                 gcvLEVEL_ERROR, gcvZONE_DRIVER,
-                "%s(%d): size (%d) too large >= %d\n",
+                "%s(%d): Invalid mapping size. size (%d) too large >= %d\n",
                 __FUNCTION__, __LINE__,
                 size, device->contiguousSize
                 );
+
             gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
         }
+/*####end for marvell-bg2*/
 
         ret = io_remap_pfn_range(
             vma,
             vma->vm_start,
-            (gctUINT32) device->contiguousPhysical >> PAGE_SHIFT,
+            device->requestedContiguousBase >> PAGE_SHIFT,
             size,
             vma->vm_page_prot
             );
-//####end for marvell-bg2
 
         if (ret != 0)
         {
@@ -702,11 +798,11 @@ static int drv_mmap(
         }
 
         data->mappedMemory = (gctPOINTER) vma->vm_start;
-    }
 
-    /* Success. */
-    gcmkFOOTER_NO();
-    return 0;
+        /* Success. */
+        gcmkFOOTER_NO();
+        return 0;
+    }
 
 OnError:
     gcmkFOOTER();
@@ -725,6 +821,11 @@ static int drv_init(void)
     gceSTATUS status;
     gckGALDEVICE device = gcvNULL;
     struct class* device_class = gcvNULL;
+
+    gcsDEVICE_CONSTRUCT_ARGS args = {
+        .recovery  = recovery,
+        .stuckDump = stuckDump,
+    };
 
     gcmkHEADER();
 
@@ -771,52 +872,53 @@ static int drv_init(void)
     }
 #endif
 
+    printk(KERN_INFO "Galcore version %d.%d.%d.%d\n",
+        gcvVERSION_MAJOR, gcvVERSION_MINOR, gcvVERSION_PATCH, gcvVERSION_BUILD);
+    /* when enable gpu profiler, we need to turn off gpu powerMangement */
+    if(gpuProfiler)
+        powerManagement = 0;
     if (showArgs)
     {
-        printk("gal3d 4.6.6 options:\n");
-        printk("  irqLine           = %d\n",      irqLine);
-        printk("  registerMemBase   = 0x%08lX\n", registerMemBase);
-        printk("  registerMemSize   = 0x%08lX\n", registerMemSize);
+        gckOS_DumpParam();
+    }
 
-        if (irqLine2D != -1)
-        {
-            printk("  irqLine2D         = %d\n",      irqLine2D);
-            printk("  registerMemBase2D = 0x%08lX\n", registerMemBase2D);
-            printk("  registerMemSize2D = 0x%08lX\n", registerMemSize2D);
-        }
-
-        if (irqLineVG != -1)
-        {
-            printk("  irqLineVG         = %d\n",      irqLineVG);
-            printk("  registerMemBaseVG = 0x%08lX\n", registerMemBaseVG);
-            printk("  registerMemSizeVG = 0x%08lX\n", registerMemSizeVG);
-        }
-
-        printk("  contiguousSize    = %ld\n",     contiguousSize);
-        printk("  contiguousBase    = 0x%08lX\n", contiguousBase);
-        printk("  bankSize          = 0x%08lX\n", bankSize);
-        printk("  fastClear         = %d\n",      fastClear);
-        printk("  compression       = %d\n",      compression);
-        printk("  signal            = %d\n",      signal);
-        printk("  baseAddress       = 0x%08lX\n", baseAddress);
-        printk("  physSize          = 0x%08lX\n", physSize);
-#if ENABLE_GPU_CLOCK_BY_DRIVER
-        printk("  coreClock       = %lu\n",     coreClock);
-#endif
+    if(logFileSize != 0)
+    {
+        gckDEBUGFS_Initialize();
     }
 
     /* Create the GAL device. */
-    gcmkONERROR(gckGALDEVICE_Construct(
+    status = gckGALDEVICE_Construct(
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+        irqLine3D0,
+        registerMemBase3D0, registerMemSize3D0,
+        irqLine3D1,
+        registerMemBase3D1, registerMemSize3D1,
+#else
         irqLine,
         registerMemBase, registerMemSize,
+#endif
         irqLine2D,
         registerMemBase2D, registerMemSize2D,
         irqLineVG,
         registerMemBaseVG, registerMemSizeVG,
         contiguousBase, contiguousSize,
         bankSize, fastClear, compression, baseAddress, physSize, signal,
+        logFileSize,
+        powerManagement,
+        gpuProfiler,
+        &args,
         &device
-        ));
+    );
+
+    if (gcmIS_ERROR(status))
+    {
+        gcmkTRACE_ZONE(gcvLEVEL_ERROR, gcvZONE_DRIVER,
+                       "%s(%d): Failed to create the GAL device: status=%d\n",
+                       __FUNCTION__, __LINE__, status);
+
+        goto OnError;
+    }
 
     /* Start the GAL device. */
     gcmkONERROR(gckGALDEVICE_Start(device));
@@ -825,9 +927,16 @@ static int drv_init(void)
        && (device->kernels[gcvCORE_MAJOR] != gcvNULL)
        && (device->kernels[gcvCORE_MAJOR]->hardware->mmuVersion != 0))
     {
+#if !gcdSECURITY
         status = gckMMU_Enable(device->kernels[gcvCORE_MAJOR]->mmu, baseAddress, physSize);
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
             "Enable new MMU: status=%d\n", status);
+
+#if gcdMULTI_GPU_AFFINITY
+        status = gckMMU_Enable(device->kernels[gcvCORE_OCL]->mmu, baseAddress, physSize);
+        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
+            "Enable new MMU: status=%d\n", status);
+#endif
 
         if ((device->kernels[gcvCORE_2D] != gcvNULL)
             && (device->kernels[gcvCORE_2D]->hardware->mmuVersion != 0))
@@ -836,13 +945,14 @@ static int drv_init(void)
             gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
                 "Enable new MMU for 2D: status=%d\n", status);
         }
+#endif
 
         /* Reset the base address */
         device->baseAddress = 0;
     }
 
     /* Register the character device. */
-    ret = register_chrdev(major, DRV_NAME, &driver_fops);
+    ret = register_chrdev(major, DEVICE_NAME, &driver_fops);
 
     if (ret < 0)
     {
@@ -861,10 +971,9 @@ static int drv_init(void)
     }
 
     /* Create the device class. */
-//####modified for marvell-bg2
-    //device_class = class_create(THIS_MODULE, "graphics_class");
+/*####modified for marvell-bg2*/
     device_class = class_create(THIS_MODULE, "graphics_3d_class");
-//####end for marvell-bg2
+/*####end for marvell-bg2*/
 
     if (IS_ERR(device_class))
     {
@@ -877,25 +986,30 @@ static int drv_init(void)
         gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
     }
 
-//####modified for marvell-bg2
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-    device_create(device_class, NULL, MKDEV(major, 0), NULL, DRV_NAME);
-    //device_create(device_class, NULL, MKDEV(major, 0), NULL, "galcore");
+    device_create(device_class, NULL, MKDEV(major, 0), NULL, DEVICE_NAME);
 #else
-    //device_create(device_class, NULL, MKDEV(major, 0), "galcore");
-    device_create(device_class, NULL, MKDEV(major, 0), DRV_NAME);
+    device_create(device_class, NULL, MKDEV(major, 0), DEVICE_NAME);
 #endif
-//####end for marvell-bg2
 
     galDevice = device;
     gpuClass  = device_class;
 
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+    gcmkTRACE_ZONE(
+        gcvLEVEL_INFO, gcvZONE_DRIVER,
+        "%s(%d): irqLine3D0=%d, contiguousSize=%lu, memBase3D0=0x%lX\n",
+        __FUNCTION__, __LINE__,
+        irqLine3D0, contiguousSize, registerMemBase3D0
+        );
+#else
     gcmkTRACE_ZONE(
         gcvLEVEL_INFO, gcvZONE_DRIVER,
         "%s(%d): irqLine=%d, contiguousSize=%lu, memBase=0x%lX\n",
         __FUNCTION__, __LINE__,
         irqLine, contiguousSize, registerMemBase
         );
+#endif
 
     /* Success. */
     gcmkFOOTER_NO();
@@ -931,10 +1045,15 @@ static void drv_exit(void)
     device_destroy(gpuClass, MKDEV(major, 0));
     class_destroy(gpuClass);
 
-    unregister_chrdev(major, DRV_NAME);
+    unregister_chrdev(major, DEVICE_NAME);
 
     gcmkVERIFY_OK(gckGALDEVICE_Stop(galDevice));
     gcmkVERIFY_OK(gckGALDEVICE_Destroy(galDevice));
+
+    if(gckDEBUGFS_IsEnabled())
+    {
+        gckDEBUGFS_Terminate();
+    }
 
 #if ENABLE_GPU_CLOCK_BY_DRIVER && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
     {
@@ -956,13 +1075,194 @@ static void drv_exit(void)
     module_exit(drv_exit);
 #else
 
-#ifdef CONFIG_DOVE_GPU
-#   define DEVICE_NAME "dove_gpu"
-#else
-#   define DEVICE_NAME "galcore"
-#endif
+/*####modified for marvell-bg2*/
+static int drv_get_dts_for_gpu(void)
+{
+    struct device_node *np;
+    struct resource res;
+    int rc = 0;
+    u32 value;
 
+    /* get the gpu3d information */
+    np = of_find_compatible_node(NULL, NULL, "marvell,berlin-gpu3d");
+    if (!np)
+    {
+        printk("gpu error: of_find_compatible_node for berlin-gpu3d failed!\n");
+        goto err_exit;
+    }
+
+    /* get the reg section */
+    rc = of_address_to_resource(np, 0, &res);
+    if (rc)
+    {
+        printk("gpu warning: of_address_to_resource for berlin-gpu3d failed!\n");
+    }
+    else
+    {
+        registerMemBase = res.start;
+        registerMemSize = resource_size(&res);
+    }
+
+    /* get the interrupt section */
+    rc = of_irq_to_resource(np, 0, &res);
+    if (!rc)
+    {
+        printk("gpu warning: of_irq_to_resource for berlin-gpu3d failed, rc=%d!\n", rc);
+    }
+    else
+    {
+        irqLine = rc;
+    }
+
+    /* get the nonsecure-mem-base section */
+    rc = of_property_read_u32(np, "marvell,nonsecure-mem-base", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for nonsecure-mem-base failed!\n");
+    }
+    else
+    {
+        contiguousBase = value;
+    }
+
+    /* get the nonsecure-mem-size section */
+    rc = of_property_read_u32(np, "marvell,nonsecure-mem-size", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for nonsecure-mem-size failed!\n");
+    }
+    else
+    {
+        contiguousSize = value;
+    }
+
+    /* get the phy-mem-size section */
+    rc = of_property_read_u32(np, "marvell,phy-mem-size", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for phy-mem-size failed!\n");
+    }
+    else
+    {
+        physSize = value;
+    }
+
+    /* get the 3D clock registers and corresponding bitfields */
+    rc = of_property_read_u32(np, "marvell,core-clock-register", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for 3D core-clock-register failed!\n");
+        coreClkRegister3D = 0;
+    }
+    else
+    {
+        coreClkRegister3D = value;
+    }
+
+    rc = of_property_read_u32(np, "marvell,sys-clock-register", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for 3D sys-clock-register failed!\n");
+        sysClkRegister3D = 0;
+    }
+    else
+    {
+        sysClkRegister3D = value;
+    }
+
+    rc = of_property_read_u32(np, "marvell,core-clock-bitfield", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for 3D core-clock-bitfield failed!\n");
+        coreClkBitfield3D = 0;
+    }
+    else
+    {
+        coreClkBitfield3D = value;
+    }
+
+    rc = of_property_read_u32(np, "marvell,sys-clock-bitfield", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for 3D sys-clock-bitfield failed!\n");
+        sysClkBitfield3D = 0;
+    }
+    else
+    {
+        sysClkBitfield3D = value;
+    }
+
+    of_node_put(np);
+
+    /* get the gpu2d information */
+    np = of_find_compatible_node(NULL, NULL, "marvell,berlin-gpu2d");
+    if (!np)
+    {
+        /* no 2d gpu, just goto exit */
+        goto err_exit;
+    }
+
+    /* get the reg section */
+    rc = of_address_to_resource(np, 0, &res);
+    if (rc)
+    {
+        printk("gpu warning: of_address_to_resource for berlin-gpu2d failed!\n");
+    }
+    else
+    {
+        registerMemBase2D = res.start;
+        registerMemSize2D = resource_size(&res);
+    }
+
+    /* get the interrupt section */
+    rc = of_irq_to_resource(np, 0, &res);
+    if (!rc)
+    {
+        printk("gpu warning: of_irq_to_resource for berlin-gpu2d failed!\n");
+    }
+    else
+    {
+        irqLine2D = rc;
+    }
+
+    /* get 2D core clock register and corresponding bitfield */
+    rc = of_property_read_u32(np, "marvell,core-clock-register", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for 2D core-clock-register failed!\n");
+        coreClkRegister2D = 0;
+    }
+    else
+    {
+        coreClkRegister2D = value;
+    }
+
+    rc = of_property_read_u32(np, "marvell,core-clock-bitfield", &value);
+    if (rc)
+    {
+        printk("gpu warning: of_property_read_u32 for 2D core-clock-bitfield failed!\n");
+        coreClkBitfield2D = 0;
+    }
+    else
+    {
+        coreClkBitfield2D = value;
+    }
+
+    of_node_put(np);
+
+    return 0;
+
+err_exit:
+    return -1;
+}
+/*####end for marvell-bg2*/
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
+static int gpu_probe(struct platform_device *pdev)
+#else
 static int __devinit gpu_probe(struct platform_device *pdev)
+#endif
 {
     int ret = -ENODEV;
     struct resource* res;
@@ -990,7 +1290,6 @@ static int __devinit gpu_probe(struct platform_device *pdev)
     registerMemBase = res->start;
     registerMemSize = res->end - res->start + 1;
 
-//####modified for marvell-bg2
     res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpu_mem");
 
     if (!res)
@@ -1001,7 +1300,11 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 
     contiguousBase = res->start;
     contiguousSize = res->end - res->start + 1;
-//####end for marvell-bg2
+
+/*####modified for marvell-bg2*/
+    ret = drv_get_dts_for_gpu();
+    /*if there is no gpu2d, it will also return error*/
+/*####end for marvell-bg2*/
 
     ret = drv_init();
 
@@ -1018,9 +1321,11 @@ gpu_probe_fail:
     return ret;
 }
 
-//####modified for marvell-bg2
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
+static int gpu_remove(struct platform_device *pdev)
+#else
 static int __devexit gpu_remove(struct platform_device *pdev)
-//####end for marvell-bg2
+#endif
 {
     gcmkHEADER();
     drv_exit();
@@ -1028,9 +1333,7 @@ static int __devexit gpu_remove(struct platform_device *pdev)
     return 0;
 }
 
-//####modified for marvell-bg2
 static int gpu_suspend(struct platform_device *dev, pm_message_t state)
-//####end for marvell-bg2
 {
     gceSTATUS status;
     gckGALDEVICE device;
@@ -1038,7 +1341,12 @@ static int gpu_suspend(struct platform_device *dev, pm_message_t state)
 
     device = platform_get_drvdata(dev);
 
-    for (i = 0; i < gcdCORE_COUNT; i++)
+    if (!device)
+    {
+        return -1;
+    }
+
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {
         if (device->kernels[i] != gcvNULL)
         {
@@ -1081,9 +1389,7 @@ static int gpu_suspend(struct platform_device *dev, pm_message_t state)
     return 0;
 }
 
-//####modified for marvell-bg2
 static int gpu_resume(struct platform_device *dev)
-//####end for marvell-bg2
 {
     gceSTATUS status;
     gckGALDEVICE device;
@@ -1092,7 +1398,12 @@ static int gpu_resume(struct platform_device *dev)
 
     device = platform_get_drvdata(dev);
 
-    for (i = 0; i < gcdCORE_COUNT; i++)
+    if (!device)
+    {
+        return -1;
+    }
+
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {
         if (device->kernels[i] != gcvNULL)
         {
@@ -1156,16 +1467,19 @@ static int gpu_resume(struct platform_device *dev)
 
 static struct platform_driver gpu_driver = {
     .probe      = gpu_probe,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
+    .remove     = gpu_remove,
+#else
     .remove     = __devexit_p(gpu_remove),
+#endif
 
     .suspend    = gpu_suspend,
     .resume     = gpu_resume,
 
     .driver     = {
-//####modified for marvell-bg2
-    //.name   = DEVICE_NAME,
-    .name   = DRV_NAME,
-//####end for marvell-bg2
+/*####modified for marvell-bg2*/
+        .name   = DRV_NAME,
+/*####end for marvell-bg2*/
     }
 };
 
@@ -1179,12 +1493,10 @@ static struct resource gpu_resources[] = {
         .name   = "gpu_base",
         .flags  = IORESOURCE_MEM,
     },
-//####modified for marvell-bg2
     {
         .name   = "gpu_mem",
         .flags  = IORESOURCE_MEM,
     },
-//####end for marvell-bg2
 };
 
 static struct platform_device * gpu_device;
@@ -1200,20 +1512,14 @@ static int __init gpu_init(void)
     gpu_resources[1].start = registerMemBase;
     gpu_resources[1].end   = registerMemBase + registerMemSize - 1;
 
-//####modified for marvell-bg2
-    //gpu_resources[2].start = contiguousBase;
-    //gpu_resources[2].end   = contiguousBase + contiguousSize - 1;
-#if USE_GALOIS_SHM
-    gpu_resources[2].start = 0;
-    gpu_resources[2].end  = 512-1;
-#else
-    gpu_resources[2].start = CONFIG_BERLIN_GPUMEM_START;
-    gpu_resources[2].end   = CONFIG_BERLIN_GPUMEM_START + CONFIG_BERLIN_GPUMEM_SIZE - 1;
-#endif
+    gpu_resources[2].start = contiguousBase;
+    gpu_resources[2].end   = contiguousBase + contiguousSize - 1;
+
+/*####modified for marvell-bg2*/
     /* Allocate device */
     gpu_device = platform_device_alloc(DRV_NAME, -1);
-    //gpu_device = platform_device_alloc(DEVICE_NAME, -1);
-//####end for marvell-bg2
+/*####end for marvell-bg2*/
+
     if (!gpu_device)
     {
         printk(KERN_ERR "galcore: platform_device_alloc failed.\n");
@@ -1222,10 +1528,7 @@ static int __init gpu_init(void)
     }
 
     /* Insert resource */
-//####modified for marvell-bg2
-    //ret = platform_device_add_resources(gpu_device, gpu_resources, 2);
     ret = platform_device_add_resources(gpu_device, gpu_resources, 3);
-//####end for marvell-bg2
     if (ret)
     {
         printk(KERN_ERR "galcore: platform_device_add_resources failed.\n");
@@ -1264,6 +1567,46 @@ static void __exit gpu_exit(void)
     platform_device_unregister(gpu_device);
 #endif
 }
+
+/*####modified for marvell-bg2*/
+#if MRVL_VIDEO_MEMORY_USE_ION
+int gpu_alloc_secure_memory(unsigned int Bytes, void **handle, unsigned int *Physical)
+{
+    if (galDevice == gcvNULL || galDevice->os == gcvNULL)
+    {
+        printk(KERN_ERR "gfx driver: gal device not initialized!\n");
+        return -1;
+    }
+
+    if (gckOS_AllocateIonMemory(galDevice->os,
+                                gcvTRUE,
+                                (gctSIZE_T *)&Bytes,
+                                (gctPHYS_ADDR *)handle,
+                                Physical) != gcvSTATUS_OK)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+void gpu_free_memory(void *handle)
+{
+    if (handle == NULL)
+    {
+        return;
+    }
+
+    if (galDevice == gcvNULL || galDevice->os == gcvNULL)
+    {
+        printk(KERN_ERR "gfx driver: gal device not initialized!\n");
+        return;
+    }
+
+    gckOS_FreeIonMemory(galDevice->os, (gctPHYS_ADDR)handle);
+}
+#endif
+/*####end for marvell-bg2*/
 
 module_init(gpu_init);
 module_exit(gpu_exit);

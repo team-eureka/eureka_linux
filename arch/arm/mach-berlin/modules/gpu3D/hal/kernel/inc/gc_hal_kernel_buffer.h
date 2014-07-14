@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -20,10 +20,8 @@
 
 
 
-
 #ifndef __gc_hal_kernel_buffer_h_
 #define __gc_hal_kernel_buffer_h_
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,11 +57,6 @@ typedef struct _gcsSTATE_DELTA
     gctUINT                     num;
 #endif
 
-    /* For dumping. */
-#if gcdDUMP
-    gcoOS                       os;
-#endif
-
     /* Main state delta ID. Every time state delta structure gets reinitialized,
        main ID is incremented. If main state ID overflows, all map entry IDs get
        reinitialized to make sure there is no potential erroneous match after
@@ -79,30 +72,56 @@ typedef struct _gcsSTATE_DELTA
     /* Number of states currently stored in the record array. */
     gctUINT                     recordCount;
 
-    /* Record array; holds all modified states. */
-    gcsSTATE_DELTA_RECORD_PTR   recordArray;
+    /* Record array; holds all modified states in gcsSTATE_DELTA_RECORD. */
+    gctUINT64                   recordArray;
 
     /* Map entry ID is used for map entry validation. If map entry ID does not
        match the main state delta ID, the entry and the corresponding state are
        considered not in use. */
-    gctUINT_PTR                 mapEntryID;
+    gctUINT64                   mapEntryID;
     gctUINT                     mapEntryIDSize;
 
     /* If the map entry ID matches the main state delta ID, index points to
        the state record in the record array. */
-    gctUINT_PTR                 mapEntryIndex;
+    gctUINT64                   mapEntryIndex;
 
-    /* Previous and next state deltas. */
-    gcsSTATE_DELTA_PTR          prev;
-    gcsSTATE_DELTA_PTR          next;
+    /* Previous and next state deltas in gcsSTATE_DELTA. */
+    gctUINT64                   prev;
+    gctUINT64                   next;
 }
 gcsSTATE_DELTA;
+
+/* Command buffer patch record. */
+struct _gcsPATCH
+{
+    /* Pointer within the buffer. */
+    gctUINT32_PTR               pointer;
+
+    /* 32-bit data to write at the specified offset. */
+    gctUINT32                   data;
+};
+
+/* List of patches for the command buffer. */
+struct _gcsPATCH_LIST
+{
+    /* Array of patch records. */
+    struct _gcsPATCH            patch[1024];
+
+    /* Number of patches in the array. */
+    gctUINT                     count;
+
+    /* Next item in the list. */
+    struct _gcsPATCH_LIST       *next;
+};
 
 /* Command buffer object. */
 struct _gcoCMDBUF
 {
     /* The object. */
     gcsOBJECT                   object;
+
+    /* Commit count. */
+    gctUINT                     count;
 
     /* Command buffer entry and exit pipes. */
     gcePIPE_SELECT              entryPipe;
@@ -114,14 +133,14 @@ struct _gcoCMDBUF
     gctBOOL                     usingFilterBlit;
     gctBOOL                     usingPalette;
 
-    /* Physical address of command buffer. */
-    gctPHYS_ADDR                physical;
+    /* Physical address of command buffer. Just a name. */
+    gctUINT32                   physical;
 
     /* Logical address of command buffer. */
-    gctPOINTER                  logical;
+    gctUINT64                   logical;
 
     /* Number of bytes in command buffer. */
-    gctSIZE_T                   bytes;
+    gctUINT32                   bytes;
 
     /* Start offset into the command buffer. */
     gctUINT32                   startOffset;
@@ -130,31 +149,42 @@ struct _gcoCMDBUF
     gctUINT32                   offset;
 
     /* Number of free bytes in command buffer. */
-    gctSIZE_T                   free;
+    gctUINT32                   free;
 
     /* Location of the last reserved area. */
-    gctPOINTER                  lastReserve;
-    gctUINT                     lastOffset;
+    gctUINT64                   lastReserve;
+    gctUINT32                   lastOffset;
 
 #if gcdSECURE_USER
     /* Hint array for the current command buffer. */
     gctUINT                     hintArraySize;
-    gctUINT32_PTR               hintArray;
-    gctUINT32_PTR               hintArrayTail;
+    gctUINT64                   hintArray;
+    gctUINT64                   hintArrayTail;
 #endif
 
 #if gcmIS_DEBUG(gcdDEBUG_CODE)
     /* Last load state command location and hardware address. */
-    gctUINT32_PTR               lastLoadStatePtr;
+    gctUINT64                   lastLoadStatePtr;
     gctUINT32                   lastLoadStateAddress;
     gctUINT32                   lastLoadStateCount;
 #endif
+
+    /* Completion signal. */
+    gctSIGNAL                   signal;
+
+    /* List of patches. */
+    struct _gcsPATCH_LIST       *patchHead;
+    struct _gcsPATCH_LIST       *patchTail;
+
+    /* Link to the siblings. */
+    gcoCMDBUF                   prev;
+    gcoCMDBUF                   next;
 };
 
 typedef struct _gcsQUEUE
 {
-    /* Pointer to next gcsQUEUE structure. */
-    gcsQUEUE_PTR                next;
+    /* Pointer to next gcsQUEUE structure in gcsQUEUE. */
+    gctUINT64                   next;
 
     /* Event information. */
     gcsHAL_INTERFACE            iface;
@@ -171,18 +201,22 @@ struct _gcoQUEUE
     gcsQUEUE_PTR                head;
     gcsQUEUE_PTR                tail;
 
-#ifdef __QNXNTO__
-    /* Buffer for records. */
-    gcsQUEUE_PTR                records;
-    gctUINT32                   freeBytes;
-    gctUINT32                   offset;
-#else
+    /* chunks of the records. */
+    gctPOINTER                  chunks;
+
     /* List of free records. */
     gcsQUEUE_PTR                freeList;
-#endif
+
     #define gcdIN_QUEUE_RECORD_LIMIT 16
     /* Number of records currently in queue */
     gctUINT32                   recordCount;
+};
+
+struct _gcsTEMPCMDBUF
+{
+    gctUINT32 currentByteSize;
+    gctPOINTER buffer;
+    gctBOOL  inUse;
 };
 
 #ifdef __cplusplus
