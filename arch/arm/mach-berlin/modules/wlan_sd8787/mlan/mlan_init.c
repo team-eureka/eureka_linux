@@ -43,6 +43,7 @@ Change log:
 #include "mlan_11h.h"
 #include "mlan_meas.h"
 #include "mlan_sdio.h"
+
 /********************************************************
 			Global Variables
 ********************************************************/
@@ -406,6 +407,7 @@ wlan_init_priv(pmlan_private priv)
 	priv->wmm_enabled = MFALSE;
 	priv->wmm_qosinfo = 0;
 	priv->saved_wmm_qosinfo = 0;
+	priv->txaggrctrl = MFALSE;
 #ifdef STA_SUPPORT
 	priv->pcurr_bcn_buf = MNULL;
 	priv->curr_bcn_size = 0;
@@ -423,7 +425,6 @@ wlan_init_priv(pmlan_private priv)
 	priv->port_open = MFALSE;
 
 	ret = wlan_add_bsspriotbl(priv);
-
 	LEAVE();
 	return ret;
 }
@@ -494,6 +495,7 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 	else
 		pmadapter->mpa_rx.enabled = MTRUE;
 	pmadapter->mpa_rx.pkt_aggr_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT;
+
 #endif /* SDIO_MULTI_PORT_RX_AGGR */
 
 	pmadapter->cmd_resp_received = MFALSE;

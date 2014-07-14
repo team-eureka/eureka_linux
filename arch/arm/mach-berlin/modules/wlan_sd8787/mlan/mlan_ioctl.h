@@ -172,6 +172,7 @@ enum _mlan_ioctl_req_id {
 	MLAN_OID_11N_CFG_TX_BF_CAP = 0x000C0009,
 	MLAN_OID_11N_CFG_DELBA = 0x000C000C,
 	MLAN_OID_11N_CFG_REJECT_ADDBA_REQ = 0x000C000D,
+	MLAN_OID_11N_CFG_TX_AGGR_CTRL = 0x000C000F,
 
 	/* 802.11d Configuration Group */
 	MLAN_IOCTL_11D_CFG = 0x000D0000,
@@ -2506,6 +2507,8 @@ typedef struct _mlan_ds_11n_cfg {
 		mlan_ds_11n_delba del_ba;
 	/** Reject Addba Req for MLAN_OID_11N_CFG_REJECT_ADDBA_REQ */
 		mlan_ds_reject_addba_req reject_addba_req;
+	/** Control TX AMPDU configuration */
+		t_u32 txaggrctrl;
 	} param;
 } mlan_ds_11n_cfg, *pmlan_ds_11n_cfg;
 

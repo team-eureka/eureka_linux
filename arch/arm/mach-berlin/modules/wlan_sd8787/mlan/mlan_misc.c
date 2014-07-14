@@ -1581,7 +1581,6 @@ wlan_add_station_entry(mlan_private * priv, t_u8 * mac)
 			       (pmlan_linked_list) sta_ptr,
 			       priv->adapter->callbacks.moal_spin_lock,
 			       priv->adapter->callbacks.moal_spin_unlock);
-
 done:
 	pmadapter->callbacks.moal_spin_unlock(pmadapter->pmoal_handle,
 					      priv->wmm.ra_list_spinlock);
@@ -1789,6 +1788,12 @@ wlan_misc_ioctl_tdls_oper(IN pmlan_adapter pmadapter,
 			       MAC2STR(ptdls_oper->peer_mac));
 			sta_ptr->status = TDLS_SETUP_COMPLETE;
 			pmadapter->tdls_status = TDLS_IN_BASE_CHANNEL;
+			if (!pmpriv->txaggrctrl)
+				wlan_11n_send_delba_to_peer(pmpriv,
+							    pmpriv->
+							    curr_bss_params.
+							    bss_descriptor.
+							    mac_address);
 			if (sta_ptr->HTcap.ieee_hdr.element_id == HT_CAPABILITY) {
 				sta_ptr->is_11n_enabled = MTRUE;
 				if (GETHT_MAXAMSDU

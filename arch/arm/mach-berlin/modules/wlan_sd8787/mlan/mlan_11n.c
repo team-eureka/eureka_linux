@@ -259,6 +259,85 @@ wlan_11n_ioctl_tx_bf_cap(IN pmlan_adapter pmadapter,
 }
 
 /**
+ *  @brief This function will send delba request to
+ *          the peer in the TxBAStreamTbl
+ *
+ *  @param priv     A pointer to mlan_private
+ *
+ *  @return         N/A
+ */
+void
+wlan_11n_send_delba_to_peer(mlan_private * priv, t_u8 * ra)
+{
+
+	TxBAStreamTbl *ptx_tbl;
+
+	ENTER();
+
+	ptx_tbl = (TxBAStreamTbl *) util_peek_list(priv->adapter->pmoal_handle,
+						   &priv->tx_ba_stream_tbl_ptr,
+						   priv->adapter->callbacks.
+						   moal_spin_lock,
+						   priv->adapter->callbacks.
+						   moal_spin_unlock);
+	if (!ptx_tbl) {
+		LEAVE();
+		return;
+	}
+
+	while (ptx_tbl != (TxBAStreamTbl *) & priv->tx_ba_stream_tbl_ptr) {
+		if (!memcmp
+		    (priv->adapter, ptx_tbl->ra, ra, MLAN_MAC_ADDR_LENGTH)) {
+			PRINTM(MIOCTL, "Tx:Send delba to tid=%d, " MACSTR "\n",
+			       ptx_tbl->tid, MAC2STR(ptx_tbl->ra));
+			wlan_send_delba(priv, MNULL, ptx_tbl->tid, ptx_tbl->ra,
+					1);
+		}
+		ptx_tbl = ptx_tbl->pnext;
+	}
+	/* Signal MOAL to trigger mlan_main_process */
+	wlan_recv_event(priv, MLAN_EVENT_ID_DRV_DEFER_HANDLING, MNULL);
+	LEAVE();
+	return;
+}
+
+/**
+ *  @brief Set/Get control to TX AMPDU configuration on infra link
+ *
+ *  @param pmadapter    A pointer to mlan_adapter structure
+ *  @param pioctl_req   A pointer to ioctl request buffer
+ *
+ *  @return             MLAN_STATUS_SUCCESS --success, otherwise fail
+ */
+static mlan_status
+wlan_11n_ioctl_txaggrctrl(IN pmlan_adapter pmadapter,
+			  IN pmlan_ioctl_req pioctl_req)
+{
+	mlan_status ret = MLAN_STATUS_SUCCESS;
+	mlan_ds_11n_cfg *cfg = MNULL;
+	mlan_private *pmpriv = pmadapter->priv[pioctl_req->bss_index];
+
+	ENTER();
+
+	cfg = (mlan_ds_11n_cfg *) pioctl_req->pbuf;
+	if (pioctl_req->action == MLAN_ACT_GET)
+		cfg->param.txaggrctrl = pmpriv->txaggrctrl;
+	else if (pioctl_req->action == MLAN_ACT_SET)
+		pmpriv->txaggrctrl = (t_u8) cfg->param.txaggrctrl;
+
+	if (pmpriv->media_connected == MTRUE) {
+		if (pioctl_req->action == MLAN_ACT_SET
+		    && !pmpriv->txaggrctrl
+		    && pmpriv->adapter->tdls_status != TDLS_NOT_SETUP)
+			wlan_11n_send_delba_to_peer(pmpriv,
+						    pmpriv->curr_bss_params.
+						    bss_descriptor.mac_address);
+	}
+	LEAVE();
+	return ret;
+}
+
+/**
  *  @brief This function will resend addba request to all
  *          the peer in the TxBAStreamTbl
  *
@@ -1218,6 +1297,7 @@ wlan_show_dot11ndevcap(pmlan_adapter pmadapter, t_u32 cap)
 	       (ISSUPP_SHORTGI20(cap) ? "supported" : "not supported"));
 	PRINTM(MINFO, "GET_HW_SPEC: LDPC coded packet receive %s\n",
 	       (ISSUPP_RXLDPC(cap) ? "supported" : "not supported"));
+
 	PRINTM(MINFO, "GET_HW_SPEC: Number of Delayed Block Ack streams = %d\n",
 	       GET_DELAYEDBACK(cap));
 	PRINTM(MINFO,
@@ -1919,6 +1999,9 @@ wlan_11n_cfg_ioctl(IN pmlan_adapter pmadapter, IN pmlan_ioctl_req pioctl_req)
 		break;
 	case MLAN_OID_11N_CFG_TX_BF_CAP:
 		status = wlan_11n_ioctl_tx_bf_cap(pmadapter, pioctl_req);
+		break;
+	case MLAN_OID_11N_CFG_TX_AGGR_CTRL:
+		status = wlan_11n_ioctl_txaggrctrl(pmadapter, pioctl_req);
 		break;
 	default:
 		pioctl_req->status_code = MLAN_ERROR_IOCTL_INVALID;
