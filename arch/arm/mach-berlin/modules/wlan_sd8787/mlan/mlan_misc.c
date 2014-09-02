@@ -1676,17 +1676,19 @@ wlan_get_tdls_list(mlan_private * priv, tdls_peer_info * buf)
 		return count;
 	}
 	while (sta_ptr != (sta_node *) & priv->sta_list) {
-		peer_info->snr = sta_ptr->snr;
-		peer_info->nf = sta_ptr->nf;
-		memcpy(priv->adapter, peer_info->mac_addr, sta_ptr->mac_addr,
-		       MLAN_MAC_ADDR_LENGTH);
-		memcpy(priv->adapter, peer_info->ht_cap, &sta_ptr->HTcap,
-		       sizeof(IEEEtypes_HTCap_t));
-		memcpy(priv->adapter, peer_info->ext_cap, &sta_ptr->ExtCap,
-		       sizeof(IEEEtypes_ExtCap_t));
+		if(sta_ptr->status == TDLS_SETUP_COMPLETE){
+			peer_info->snr = sta_ptr->snr;
+			peer_info->nf = sta_ptr->nf;
+			memcpy(priv->adapter, peer_info->mac_addr, sta_ptr->mac_addr,
+					MLAN_MAC_ADDR_LENGTH);
+			memcpy(priv->adapter, peer_info->ht_cap, &sta_ptr->HTcap,
+					sizeof(IEEEtypes_HTCap_t));
+			memcpy(priv->adapter, peer_info->ext_cap, &sta_ptr->ExtCap,
+					sizeof(IEEEtypes_ExtCap_t));
+			peer_info++;
+			count++;
+		}
 		sta_ptr = sta_ptr->pnext;
-		peer_info++;
-		count++;
 		if (count >= MLAN_MAX_TDLS_PEER_SUPPORTED)
 			break;
 	}
