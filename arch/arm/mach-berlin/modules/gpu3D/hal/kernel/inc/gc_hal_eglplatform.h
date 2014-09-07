@@ -206,6 +206,11 @@ gcoOS_GetDisplayOption(
     int index,
     int *pValue1,
     int *pValue2);
+
+gceSTATUS
+gcoOS_GetDisplayMscAndUst(
+    OUT gctUINT64 *Msc,
+    OUT gctUINT64 *Ust);
 /*####end for marvell-bg2*/
 
 gceSTATUS
