@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
-
 
 
 
@@ -63,6 +62,9 @@ typedef struct _gcsCONTEXT
     /* Logical address of the context buffer. */
     gctUINT32_PTR               logical;
 
+    /* Hardware address of the context buffer. */
+    gctUINT32                   address;
+
     /* Pointer to the LINK commands. */
     gctPOINTER                  link2D;
     gctPOINTER                  link3D;
@@ -91,14 +93,14 @@ struct _gckCONTEXT
     gckHARDWARE                 hardware;
 
     /* Command buffer alignment. */
-    gctSIZE_T                   alignment;
-    gctSIZE_T                   reservedHead;
-    gctSIZE_T                   reservedTail;
+    gctUINT32                   alignment;
+    gctUINT32                   reservedHead;
+    gctUINT32                   reservedTail;
 
     /* Context buffer metrics. */
     gctSIZE_T                   stateCount;
-    gctSIZE_T                   totalSize;
-    gctSIZE_T                   bufferSize;
+    gctUINT32                   totalSize;
+    gctUINT32                   bufferSize;
     gctUINT32                   linkIndex2D;
     gctUINT32                   linkIndex3D;
     gctUINT32                   linkIndexXD;
@@ -135,6 +137,19 @@ struct _gckCONTEXT
     /* Hint array. */
 #if gcdSECURE_USER
     gctBOOL_PTR                 hint;
+#endif
+
+#if VIVANTE_PROFILER_CONTEXT
+    gcsPROFILER_COUNTERS        latestProfiler;
+    gcsPROFILER_COUNTERS        histroyProfiler;
+    gctUINT32                   prevVSInstCount;
+    gctUINT32                   prevVSBranchInstCount;
+    gctUINT32                   prevVSTexInstCount;
+    gctUINT32                   prevVSVertexCount;
+    gctUINT32                   prevPSInstCount;
+    gctUINT32                   prevPSBranchInstCount;
+    gctUINT32                   prevPSTexInstCount;
+    gctUINT32                   prevPSPixelCount;
 #endif
 };
 

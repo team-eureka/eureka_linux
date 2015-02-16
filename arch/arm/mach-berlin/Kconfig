@@ -66,28 +66,6 @@ config BERLIN_GPU3D
         help
           3D GPU support
 
-config BERLIN_GPUMEM_FROM_SHM
-        bool "allocate GPU memory from SHM"
-        default y
-        help
-          set to y to allocate GPU memory from SHM;
-          if reserve GPU MEM in Linux kernel(BERLIN_GPUMEM_START,
-          BERLIN_GPUMEM_SIZE),then set to n
-
-config BERLIN_GPUMEM_START
-        hex "Physical start of GPU memory"
-        depends on !BERLIN_GPUMEM_FROM_SHM
-        default 0x22400000
-        help
-          The physical start of GPU memory, in bytes.
-
-config BERLIN_GPUMEM_SIZE
-        hex "Size of GPU memory"
-        depends on !BERLIN_GPUMEM_FROM_SHM
-        default 0x00000000
-        help
-          Size of GPU memory, in bytes.
-
 config BERLIN_PE
         tristate "Support Presentation Engine"
         default m
@@ -138,13 +116,12 @@ config BERLIN_FASTLOGO
 	default n
 	help
 	  Enable support for fast logo
-	  
+
 config BERLIN_PWM
 	bool "Support PWM"
 	default n
 	help
-	  Enable support for PWM	  
-
+	  Enable support for PWM
 endmenu
 
 endif

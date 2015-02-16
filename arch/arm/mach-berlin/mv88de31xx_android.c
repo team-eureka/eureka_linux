@@ -75,16 +75,16 @@ static __initdata struct board_config {
 #define BG2PROTO_MTDPARTS(__RO__)                      \
       "mv_nand:"                                       \
       "1M(block0)ro," /* flash config params */        \
-      "8M(bootloader)ro," /* 8x copies */              \
+      "8M(bootloader)" __RO__ "," /* 8x copies */      \
       "7M(fts)ro,"                                     \
       "16M(kernel)"__RO__ ","                          \
       "60M(recovery),"                                 \
       "80M(backupsys)ro,"                              \
-      "16M(factory_store)ro,"                          \
-      "400M(rootfs),"                                  \
+      "16M(factory_store)" __RO__ ","                  \
+      "400M(rootfs)" __RO__ ","                        \
       "32M(localstorage),"                             \
       "300M(cache),"                                   \
-      "1024M(userdata),"                               \
+      "1024M(userdata),"                                \
       "8M@4088M(bbt)ro"
       /* TODO: limit write access to important partitions
        * in non-recovery mode
@@ -111,13 +111,13 @@ static __initdata struct board_config {
 #define EUREKA_B1_MTDPARTS(__RO__,__RRO__)             \
       "mv_nand:"                                       \
       "1M(block0)ro," /* flash config params */        \
-      "8M(bootloader)ro," /* 8x copies */              \
+      "8M(bootloader)" __RO__ "," /* 8x copies */      \
       "7M(fts)ro,"                                     \
       "16M(kernel)"__RO__ ","                          \
       "60M(recovery),"                                 \
       "80M(backupsys),"                                \
-      "16M(factory_store)ro,"                          \
-      "400M(rootfs),"                                  \
+      "16M(factory_store)" __RO__ ","                  \
+      "400M(rootfs)" __RRO__","                        \
       "300M(cache),"                                   \
       "1024M(userdata),"                               \
       "8M@2040M(bbt)ro"
@@ -143,15 +143,15 @@ static __initdata struct board_config {
 #define EUREKA_B2_MTDPARTS(__RO__)                           \
       "mv_nand:"                                             \
       "1M(block0)ro," /* flash config params */              \
-      "8M(bootloader)ro," /* 8x copies */                    \
+      "8M(bootloader)" __RO__ "," /* 8x copies */            \
       "16M(kernel)"__RO__ ","                                \
-      "400M(rootfs),"                                        \
+      "400M(rootfs)"__RO__ ","                               \
       "300M(cache),"                                         \
       "1147M(userdata),"                                     \
       "48M(recovery),"                                       \
       "96M(backupsys),"                                      \
       "8M(fts)ro,"                                           \
-      "16M(factory_store)ro,"                                \
+      "16M(factory_store)" __RO__ ","                        \
       "8M(bbt)ro"
       .mtdparts = EUREKA_B2_MTDPARTS("ro"),
       .mtdparts_ro = EUREKA_B2_MTDPARTS("ro"),
@@ -175,15 +175,15 @@ static __initdata struct board_config {
 #define EUREKA_B3_MTDPARTS(__RO__)                           \
       "mv_nand:"                                             \
       "1M(block0)ro," /* flash config params */              \
-      "8M(bootloader)ro," /* 8x copies */                    \
+      "8M(bootloader)" __RO__ "," /* 8x copies */            \
       "16M(kernel)"__RO__ ","                                \
-      "400M(rootfs),"                                        \
+      "400M(rootfs)"__RO__ ","                               \
       "300M(cache),"                                         \
       "1147M(userdata),"                                     \
       "48M(recovery),"                                       \
       "96M(backupsys),"                                      \
       "8M(fts)ro,"                                           \
-      "16M(factory_store)ro,"                                \
+      "16M(factory_store)" __RO__ ","                        \
       "8M(bbt)ro"
       .mtdparts = EUREKA_B3_MTDPARTS("ro"),
       .mtdparts_ro = EUREKA_B3_MTDPARTS("ro"),
@@ -197,6 +197,7 @@ static __initdata struct board_config {
 #define DEFAULT_BOARD  "bg2proto"
 static __initdata char board_name[32] = DEFAULT_BOARD;
 
+static __initdata char console[32];
 static __initdata char boot_mode[32];
 static __initdata char root[32];
 static __initdata int ro_mode = 0;
@@ -238,6 +239,9 @@ static int __init do_param(char *param, char *val, const char *unused)
         ro_mode = 1;
         return 0;
     }
+
+    if (!strcmp(param, "console") && val)
+        strlcpy(console, val, sizeof(console));
 
     if (!strcmp(param, "root") && val)
         strlcpy(root, val, sizeof(root));
@@ -285,18 +289,15 @@ void __init mv88de31xx_android_fixup(char **from)
     /* Locate command line ATAG and extract command line */
     cmdline = get_cmdline();
 
+    /* Override from(defaultp_command_line) */
+    *from = mv88de31xx_command_line;
+    mv88de31xx_command_line[0] = '\0';
+
     /* Scan boot command line removing all memory layout
      * parameters on the way.
      */
     mv88de31xx_command_line[0] = '\0';
-
-#if defined(CONFIG_CMDLINE_EXTEND) || defined(CONFIG_CMDLINE_FORCE)
-    strlcat(mv88de31xx_command_line, *from, COMMAND_LINE_SIZE);
-#endif
-
-#if defined(CONFIG_CMDLINE_EXTEND) || defined(CONFIG_CMDLINE_FROM_BOOTLOADER)
     parse_args("memory_setup", cmdline, NULL, 0, 0, 0, do_param);
-#endif
 
     recovery_boot = !strcmp(boot_mode, "recovery");
     if (recovery_boot)
@@ -330,15 +331,19 @@ void __init mv88de31xx_android_fixup(char **from)
     add_boot_param("androidboot.hardware", board_name);
     if (boot_mode[0])
         add_boot_param("androidboot.mode", boot_mode);
+    if (console[0]) {
+        /* keep only console device name, e.g. ttyS0 */
+        char *p = strchr(console, ',');
+        if (p)
+            *p = '\0';
+        add_boot_param("androidboot.console", console);
+    }
 
     /* Register optional reboot hook */
     if (cfg->reboot_notifier) {
         reboot_notifier.notifier_call = cfg->reboot_notifier;
         register_reboot_notifier(&reboot_notifier);
     }
-
-    /* Override from(defaultp_command_line) */
-    *from = mv88de31xx_command_line;
 
     return;
 }

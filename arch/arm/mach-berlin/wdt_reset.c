@@ -95,7 +95,7 @@ static int Galois_SM_WDT(unsigned int wdt_instance, unsigned int rst_type, int i
 		BFM_HOST_Bus_Write32( (wdt_base+0x00),0x10);
 	else
 		BFM_HOST_Bus_Write32( (wdt_base+0x00),0x12);      //
-	// time out around 2^(16 + 6) / 25M = 0.64 sec
+        // time out around 2^(16 + 6) / 25M = 0.64 sec
 	BFM_HOST_Bus_Write32( (wdt_base+0x04),0x08);
 	BFM_HOST_Bus_Read32((wdt_base+0x00),&read);
 	read |=0x01;                                          // enable WDT

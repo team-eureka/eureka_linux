@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -20,93 +20,56 @@
 
 
 
-
-#ifndef __gc_hal_kernel_hardware_h_
-#define __gc_hal_kernel_hardware_h_
-
-#if gcdENABLE_VG
-#include "gc_hal_kernel_hardware_vg.h"
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#ifndef __gc_hal_kernel_hardware_vg_h_
+#define __gc_hal_kernel_hardware_vg_h_
 
 /* gckHARDWARE object. */
-struct _gckHARDWARE
+struct _gckVGHARDWARE
 {
     /* Object. */
     gcsOBJECT                   object;
 
-    /* Pointer to gctKERNEL object. */
-    gckKERNEL                   kernel;
+    /* Pointer to gckKERNEL object. */
+    gckVGKERNEL                 kernel;
 
-    /* Pointer to gctOS object. */
+    /* Pointer to gckOS object. */
     gckOS                       os;
 
-    /* Core */
-    gceCORE                     core;
-
     /* Chip characteristics. */
-    gcsHAL_QUERY_CHIP_IDENTITY  identity;
+    gceCHIPMODEL                chipModel;
+    gctUINT32                   chipRevision;
+    gctUINT32                   chipFeatures;
+    gctUINT32                   chipMinorFeatures;
+    gctUINT32                   chipMinorFeatures2;
     gctBOOL                     allowFastClear;
-    gctBOOL                     allowCompression;
-    gctUINT32                   powerBaseAddress;
-    gctBOOL                     extraEventStates;
 
-    /* Big endian */
-    gctBOOL                     bigEndian;
+    /* Features. */
+    gctBOOL                     fe20;
+    gctBOOL                     vg20;
+    gctBOOL                     vg21;
 
-    /* Chip status */
+    /* Event mask. */
+    gctUINT32                   eventMask;
+
+    gctBOOL                     clockState;
+    gctBOOL                     powerState;
     gctPOINTER                  powerMutex;
     gctUINT32                   powerProcess;
     gctUINT32                   powerThread;
     gceCHIPPOWERSTATE           chipPowerState;
-    gctUINT32                   lastWaitLink;
-    gctBOOL                     clockState;
-    gctBOOL                     powerState;
-    gctPOINTER                  globalSemaphore;
-
+    gceCHIPPOWERSTATE           chipPowerStateGlobal;
     gctISRMANAGERFUNC           startIsr;
     gctISRMANAGERFUNC           stopIsr;
     gctPOINTER                  isrContext;
-
-    gctUINT32                   mmuVersion;
-
-    /* Type */
-    gceHARDWARE_TYPE            type;
-
+    gctPOINTER                  pageTableDirty;
 #if gcdPOWEROFF_TIMEOUT
     gctUINT32                   powerOffTime;
-    gctPOINTER                  powerOffSema;
     gctUINT32                   powerOffTimeout;
+    gctPOINTER                  powerOffTimer;
 #endif
 
-    gctPOINTER                  pageTableDirty;
+    gctBOOL                     powerManagement;
 };
-
-gceSTATUS
-gckHARDWARE_GetBaseAddress(
-    IN gckHARDWARE Hardware,
-    OUT gctUINT32_PTR BaseAddress
-    );
-
-gceSTATUS
-gckHARDWARE_NeedBaseAddress(
-    IN gckHARDWARE Hardware,
-    IN gctUINT32 State,
-    OUT gctBOOL_PTR NeedBase
-    );
-
-gceSTATUS
-gckHARDWARE_GetFrameInfo(
-    IN gckHARDWARE Hardware,
-    OUT gcsHAL_FRAME_INFO * FrameInfo
-    );
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* __gc_hal_kernel_hardware_h_ */
 

@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -20,9 +20,6 @@
 
 
 
-
-
-
 #ifndef __gc_hal_kernel_vg_h_
 #define __gc_hal_kernel_vg_h_
 
@@ -33,7 +30,6 @@
 /******************************************************************************\
 ********************************** Structures **********************************
 \******************************************************************************/
-
 
 /* gckKERNEL object. */
 struct _gckVGKERNEL
