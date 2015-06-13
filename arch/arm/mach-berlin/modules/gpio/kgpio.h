@@ -27,6 +27,9 @@
 #define SM_GPIO_IOCTL_CLEAR_IRQ		0x4448
 #define SM_GPIO_IOCTL_READ_IRQ		0x4449
 
+/* Team Eureka extension to work around old bootloader */
+#define GPIO_IOCTL_ATTACH_PWM	0x8888
+
 #define GPIO_MODE_DATA_IN		1
 #define GPIO_MODE_DATA_OUT		2
 #define GPIO_MODE_IRQ_LOWLEVEL	3

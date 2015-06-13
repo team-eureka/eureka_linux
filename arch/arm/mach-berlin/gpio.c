@@ -277,6 +277,30 @@ int GPIO_PortGetInOut(int port, int *inout)
 }
 
 /****************************************************
+ * FUNCTION: Attach or detach PWM to GPIO pins
+ * PARAMS: attach - 1: PWM, 0: GPIO
+ * RETURN: 0 - succeed.
+ *        -1 - fail.
+ ***************************************************/
+int GPIO_AttachPWM(int attach)
+{
+	int reg_pinmux = MEMMAP_CHIP_CTRL_REG_BASE + 0x0000; // RA_Gbl_pinMux
+	int pinmux;
+
+	GA_REG_WORD32_READ(reg_pinmux, &pinmux);
+
+	pinmux &= ~0x07; // Gbl_pinMux_gp0 mask
+	if (attach)
+		pinmux |= (0x03 << 0); // Gbl_pinMux_gp0_MODE_3
+	else
+		pinmux |= (0x01 << 0); // Gbl_pinMux_gp0_MODE_1
+
+	GA_REG_WORD32_WRITE(reg_pinmux, pinmux);
+
+	return 0;
+}
+
+/****************************************************
  * FUNCTION: Get data of Galois GPIO pin
  * PARAMS: port - GPIO port # (0 ~ 31)
  *		   *data - the data in APB_GPIO_SWPORTA_DR
@@ -1031,6 +1055,7 @@ EXPORT_SYMBOL(GPIO_PortWrite);
 EXPORT_SYMBOL(GPIO_PortRead);
 EXPORT_SYMBOL(GPIO_PortSetInOut);
 EXPORT_SYMBOL(GPIO_PortGetInOut);
+EXPORT_SYMBOL(GPIO_AttachPWM);
 EXPORT_SYMBOL(GPIO_PortGetData);
 EXPORT_SYMBOL(GPIO_PortInitIRQ);
 EXPORT_SYMBOL(GPIO_PortEnableIRQ);

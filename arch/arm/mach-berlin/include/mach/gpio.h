@@ -134,6 +134,14 @@ int GPIO_PortSetInOut(int port, int in);
 int GPIO_PortGetInOut(int port, int *inout);
 
 /****************************************************
+ * FUNCTION: Attach or detach PWM to GPIO pins
+ * PARAMS: attach - 1: PWM, 0: GPIO
+ * RETURN: 0 - succeed.
+ *        -1 - fail.
+ ***************************************************/
+int GPIO_AttachPWM(int attach);
+
+/****************************************************
  * FUNCTION: Get data of Galois GPIO pin
  * PARAMS: port - GPIO port # (0 ~ 31)
  *		   *data - the data in APB_GPIO_SWPORTA_DR

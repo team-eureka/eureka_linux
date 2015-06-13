@@ -493,6 +493,12 @@ init_irq_exit:
 		free_irq(priv.sm_gpio1_irq, &gpio_dev_id);
 		mutex_unlock(&irq_init_mutex);
 		break;
+	case GPIO_IOCTL_ATTACH_PWM:
+		if (GPIO_AttachPWM(arg)) {
+			printk("GPIO_AttachPWM error\n");
+			return -ENODEV;
+		}
+		break;
 	default:
 		return -EPERM;
 	}
