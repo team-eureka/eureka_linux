@@ -57,6 +57,7 @@ HRESULT  MV_CC_CBufBody_Create(UINT32	*pSHMOffset,
 		MV_CC_DBG_Error(res, "MV_CC_CBufBody_Create MV_SHM_Malloc", NULL);
 		return res;
 	}
+	MV_SHM_Takeover(SHMOffset);
 
 	pCBufBody = (pMV_CC_CBufBody_t)MV_SHM_GetCacheVirtAddr(SHMOffset);
 	if (pCBufBody == NULL) {

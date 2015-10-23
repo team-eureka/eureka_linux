@@ -38,7 +38,7 @@ Change log:
 #define FW_HAS_LAST_BLOCK		0x00000004
 
 /** Firmware data transmit size */
-#define FW_DATA_XMIT_SIZE       (sizeof(FWHeader) + DataLength + sizeof(t_u32))
+#define FW_DATA_XMIT_SIZE (sizeof(FWHeader) + DataLength + sizeof(t_u32))
 
 /** FWHeader */
 typedef struct _FWHeader {

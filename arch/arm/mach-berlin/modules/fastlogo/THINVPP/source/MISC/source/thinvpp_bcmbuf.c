@@ -18,9 +18,8 @@
 
 #define _THINVPP_BCMBUF_C
 
-#include "thinvpp_module.h"
-#include "thinvpp_common.h"
-#include "Galois_memmap.h"
+#include "fastlogo.h"
+#include "galois_io.h"
 #include "avio.h"
 #include "galois_io.h"
 #include "maddr.h"
@@ -31,6 +30,7 @@
 #include <asm/outercache.h>
 #include <asm/io.h>
 
+#if !LOGO_USE_SHM
 static void inner_outer_flush_dcache_area(void *addr, size_t length)
 {
 	phys_addr_t start, end;
@@ -40,8 +40,10 @@ static void inner_outer_flush_dcache_area(void *addr, size_t length)
 	start = virt_to_phys(addr);
 	end   = start + length;
 
-	outer_cache.flush_range(start, end);
+	// USE formal way
+	outer_clean_range(start, end);
 }
+#endif
 
 /***************************************************************
  * FUNCTION: allocate register programming buffer
@@ -127,7 +129,9 @@ int THINVPP_BCMBUF_Reset(BCMBUF *pbcmbuf)
     /*set pointers to the head*/
     pbcmbuf->writer = pbcmbuf->head;
     pbcmbuf->dv1_head = pbcmbuf->head;
-    //pbcmbuf->dv3_head = pbcmbuf->dv1_head + (pbcmbuf->size/16)*3;
+#if !LOGO_USE_SHM
+    pbcmbuf->dv3_head = pbcmbuf->dv1_head + (pbcmbuf->size/16)*3;
+#endif
     pbcmbuf->subID = -1; /* total */
 
     return MV_THINVPP_OK;
@@ -143,10 +147,12 @@ void THINVPP_BCMBUF_Select(BCMBUF *pbcmbuf, int subID)
     /* reset read/write pointer of the buffer */
     if (subID == CPCB_1){
         pbcmbuf->writer = pbcmbuf->dv1_head;
-    //} else if (subID == CPCB_3) {
-        //pbcmbuf->writer = pbcmbuf->dv3_head;
-    //} else {
-        //pbcmbuf->writer = pbcmbuf->head;
+#if !LOGO_USE_SHM
+    } else if (subID == CPCB_3) {
+        pbcmbuf->writer = pbcmbuf->dv3_head;
+    } else {
+        pbcmbuf->writer = pbcmbuf->head;
+#endif
     }
 
     pbcmbuf->subID = subID;
@@ -283,10 +289,10 @@ int THINVPP_BCMDHUB_CFGQ_Commit(DHUB_CFGQ *cfgQ, int cpcbID)
     }
 
 #if LOGO_USE_SHM
-    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), avioDhubChMap_vpp_BCM_R, cfgQ->phys, (int)cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
+    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), soc->avioDhubChMap_vpp_BCM_R, cfgQ->phys, (int)cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
 #else
     inner_outer_flush_dcache_area(cfgQ->addr, cfgQ->len*8);
-    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), avioDhubChMap_vpp_BCM_R, (int)virt_to_phys(cfgQ->addr), (int)cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
+    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), soc->avioDhubChMap_vpp_BCM_R, (int)virt_to_phys(cfgQ->addr), (int)cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
 #endif
     while( !BCM_SCHED_PushCmd(sched_qid, bcm_sched_cmd, NULL));
 
@@ -322,10 +328,10 @@ int THINVPP_BCMBUF_To_CFGQ(BCMBUF *pbcmbuf, DHUB_CFGQ *cfgQ)
         return MV_THINVPP_EBADPARAM;
 
 #if LOGO_USE_SHM
-    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), avioDhubChMap_vpp_BCM_R, pbcmbuf->phys, size, 0, 0, 0, 1, bcm_sched_cmd);
+    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), soc->avioDhubChMap_vpp_BCM_R, pbcmbuf->phys, size, 0, 0, 0, 1, bcm_sched_cmd);
 #else
     inner_outer_flush_dcache_area(start, size);
-    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), avioDhubChMap_vpp_BCM_R, (int)virt_to_phys(start), size, 0, 0, 0, 1, bcm_sched_cmd);
+    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), soc->avioDhubChMap_vpp_BCM_R, (int)virt_to_phys(start), size, 0, 0, 0, 1, bcm_sched_cmd);
 #endif
     while( !BCM_SCHED_PushCmd(BCM_SCHED_Q13, bcm_sched_cmd, cfgQ->addr + cfgQ->len*2));
     cfgQ->len += 2;
@@ -347,10 +353,10 @@ void THINVPP_CFGQ_To_CFGQ(DHUB_CFGQ *src_cfgQ, DHUB_CFGQ *cfgQ)
         return;
 
 #if LOGO_USE_SHM
-    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), avioDhubChMap_vpp_BCM_R, src_cfgQ->phys, (int)src_cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
+    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), soc->avioDhubChMap_vpp_BCM_R, src_cfgQ->phys, (int)src_cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
 #else
     inner_outer_flush_dcache_area(src_cfgQ->addr, src_cfgQ->len*8);
-    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), avioDhubChMap_vpp_BCM_R, (int)virt_to_phys(src_cfgQ->addr), (int)src_cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
+    dhub_channel_generate_cmd(&(VPP_dhubHandle.dhub), soc->avioDhubChMap_vpp_BCM_R, (int)virt_to_phys(src_cfgQ->addr), (int)src_cfgQ->len*8, 0, 0, 0, 1, bcm_sched_cmd);
 #endif
     while( !BCM_SCHED_PushCmd(BCM_SCHED_Q13, bcm_sched_cmd, cfgQ->addr + cfgQ->len*2));
     cfgQ->len += 2;

@@ -1383,10 +1383,26 @@ int nand_isbad_bbt(struct mtd_info *mtd, loff_t offs, int allowbbt)
 	struct nand_chip *this = mtd->priv;
 	int block;
 	uint8_t res;
+	int mtd_type;
+	loff_t dst;
 
 	/* Get block number * 2 */
-	block = (int)(offs >> (this->bbt_erase_shift - 1));
-	res = (this->bbt[block >> 3] >> (block & 0x06)) & 0x03;
+	mtd_type = this->get_mtd_info(mtd, offs, &dst);
+	if ((mtd_type == MTD_ESLC) || (mtd_type == MTD_SLC)) {
+		/* the physical erase shift is erase_shift + 1 */
+		block = (int)(dst >> this->bbt_erase_shift);
+		res = (this->bbt[block >> 3] >> (block & 0x06)) & 0x03;
+	} else if (mtd_type == MTD_DUAL_PLANE ) {
+		block = (int)((offs + (mtd->erasesize>>1)) >> (this->bbt_erase_shift - 2));
+		res = (this->bbt[block >> 3] >> (block & 0x06)) & 0x03;
+
+		block = (int)(offs >> (this->bbt_erase_shift - 2));
+		res |= (this->bbt[block >> 3] >> (block & 0x06)) & 0x03;
+	} else {
+		block = (int)(offs >> (this->bbt_erase_shift - 1));
+		res = (this->bbt[block >> 3] >> (block & 0x06)) & 0x03;
+	}
+
 
 	pr_debug("nand_isbad_bbt(): bbt info for offs 0x%08x: "
 			"(block %d) 0x%02x\n",

@@ -34,41 +34,101 @@
 
 #define MV_USB_RESET_TRIGGER		0x0178	/* RA_Gbl_ResetTrigger */
 
+#define USB2_OTG_REG0		0x34
+#define USB2_CHARGER_REG0	0x38
+#define USB2_PLL_REG0		0x0
+#define USB2_PLL_REG1		0x4
+#define USB2_DIG_REG0		0x1c
+#define USB2_TX_CH_CTRL0	0x0c
+#define USB2_CAL_CTRL		8
+
 struct berlin_ehci_hcd {
 	struct ehci_hcd *ehci;
 	void __iomem *phy_base;
-	u32 reset;
+	int reset;
 	int pwr_gpio;
 };
 
+static int berlin_cdp_reinit_phy(void __iomem *base)
+{
+	u32 data, timeout;
+
+	/* powering up OTG */
+	data = readl( base + USB2_OTG_REG0);
+	data |= 1<<4;
+	writel(data, (base + USB2_OTG_REG0));
+
+	/* powering Charger detector circuit */
+	data = readl( base + USB2_CHARGER_REG0);
+	data |= 1<<5;
+	writel(data, (base + USB2_CHARGER_REG0));
+
+	/* Power up analog port */
+	writel(0x03BE7F6F, (base + USB2_TX_CH_CTRL0));
+
+	/* Squelch setting */
+	writel(0xC39F16CE, (base + USB2_DIG_REG0));
+
+	/* Impedance calibration */
+	writel(0xf5930488, (base + USB2_CAL_CTRL));
+
+	/* Configuring FBDIV for SOC Clk 25 Mhz */
+	data = readl( base + USB2_PLL_REG0);
+	data &= 0xce00ff80;
+	data |= 5 | (0x60<<16) | (0<<28);
+	writel(data, (base + USB2_PLL_REG0));
+
+	/* Power up PLL, Reset, Suspen_en disable */
+	writel(0x407, (base + USB2_PLL_REG1));
+	udelay(100);
+
+	/* Deassert Reset */
+	writel(0x403, (base + USB2_PLL_REG1));
+
+	/* Wait for PLL Lock */
+	timeout = 0x1000000;
+	do {
+		data = readl( base + USB2_PLL_REG0);
+		if (!--timeout)
+			break;
+	} while ( !(data&0x80000000));
+
+	if (!timeout)
+		printk(KERN_ERR "ERROR: USB PHY PLL NOT LOCKED!\n");
+
+	return 0;
+}
+
 static void mv_start_ehc(struct usb_hcd *hcd)
 {
-	u32 temp;
 	struct berlin_ehci_hcd *berlin = dev_get_drvdata(hcd->self.controller);
 
-	GPIO_PortWrite(berlin->pwr_gpio, 0);
-
+	if (berlin->pwr_gpio >= 0)
+		GPIO_PortWrite(berlin->pwr_gpio, 0);
+#ifdef CONFIG_BERLIN2CDP
+	berlin_cdp_reinit_phy(berlin->phy_base);
+#else
 	writel(PHY_PLL, berlin->phy_base + MV_USB_PHY_PLL_REG);
 	writel(0x2235, berlin->phy_base + MV_USB_PHY_PLL_CONTROL_REG);
 	writel(0x5680, berlin->phy_base + MV_USB_PHY_ANALOG_REG);
 	writel(0xAA79, berlin->phy_base + MV_USB_PHY_RX_CTRL_REG);
 
-	/* set USBMODE to host mode */
-/*	temp = ehci_readl(ehci, hcd->regs + MV_USBMODE);
-	temp |= USBMODE_CM_HOST;
-	ehci_writel(ehci, temp, hcd->regs + MV_USBMODE);*/
-
-	temp = 1 << berlin->reset;
-	writel(temp, IOMEM(MEMMAP_CHIP_CTRL_REG_BASE + MV_USB_RESET_TRIGGER));
-
-	GPIO_PortWrite(berlin->pwr_gpio, 1);
+	if (berlin->reset >= 0) {
+		u32 temp;
+		temp = 1 << berlin->reset;
+		writel(temp, IOMEM(MEMMAP_CHIP_CTRL_REG_BASE + MV_USB_RESET_TRIGGER));
+	}
+#endif
+	if (berlin->pwr_gpio >= 0)
+		GPIO_PortWrite(berlin->pwr_gpio, 1);
 }
 
 static void mv_stop_ehc(struct usb_hcd *hcd)
 {
 	struct berlin_ehci_hcd *berlin = dev_get_drvdata(hcd->self.controller);
 
-	GPIO_PortWrite(berlin->pwr_gpio, 0);
+	if (berlin->pwr_gpio >= 0)
+		GPIO_PortWrite(berlin->pwr_gpio, 0);
 }
 
 static int ehci_mv_setup(struct usb_hcd *hcd)
@@ -162,16 +222,18 @@ static int berlin_ehci_probe(struct platform_device *pdev)
 	berlin->phy_base = (void __iomem *)val;
 
 	if (of_property_read_u32(np, "reset-bit", &val)) {
-		dev_err(&pdev->dev, "no reset-bit set\n");
-		return -EINVAL;
+		/* berlin2cdp don't need reset */
+		berlin->reset = -1;
+	} else {
+		berlin->reset = val;
 	}
-	berlin->reset = val;
 
 	if (of_property_read_u32(np, "pwr-gpio", &val)) {
-		dev_err(&pdev->dev, "no pwr-gpio set\n");
-		return -EINVAL;
+		/* some platform don't have pwr gpio */
+		berlin->pwr_gpio = -1;
+	} else {
+		berlin->pwr_gpio = val;
 	}
-	berlin->pwr_gpio = val;
 
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 	if (!res) {

@@ -241,11 +241,8 @@ typedef struct THINVPP_OBJ_T {
     unsigned int base_addr;       // VPP object hardware base address
     HDL_semaphore *pSemHandle; // semaphore handler of CPCB semaphores
 
-#if (BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
-    int dhub_cmdQ[avioDhubChMap_vpp_TT_R];
-#else //(BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
-    UINT32 dhub_cmdQ[avioDhubChMap_vpp_SPDIF_W];
-#endif //(BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
+    //int dhub_cmdQ[(VPP_NUM_OF_CHANNELS - 1)];
+    int dhub_cmdQ[(VPP_NUM_OF_CHANNELS_Z1>VPP_NUM_OF_CHANNELS_A0?  VPP_NUM_OF_CHANNELS_Z1: VPP_NUM_OF_CHANNELS_A0) - 1];
 
     int hdmi_mute;
     BCMBUF vbi_bcm_buf[2];

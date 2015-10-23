@@ -78,12 +78,22 @@ typedef MLAN_PACK_START enum _IEEEtypes_ElementId_e {
 	COUNTRY_INFO = 7,
 #endif /* STA_SUPPORT */
 
+	POWER_CONSTRAINT = 32,
+	POWER_CAPABILITY = 33,
+	TPC_REQUEST = 34,
+	TPC_REPORT = 35,
+	CHANNEL_SWITCH_ANN = 37,
+	QUIET = 40,
+	IBSS_DFS = 41,
+	SUPPORTED_CHANNELS = 36,
+	REGULATORY_CLASS = 59,
 	HT_CAPABILITY = 45,
 	QOS_INFO = 46,
 	HT_OPERATION = 61,
 	BSSCO_2040 = 72,
 	OVERLAPBSSSCANPARAM = 74,
 	EXT_CAPABILITY = 127,
+	LINK_ID = 101,
 
 	ERP_INFO = 42,
 
@@ -130,8 +140,7 @@ typedef MLAN_PACK_START struct _IEEEtypes_VendorSpecific_t {
 	IEEEtypes_VendorHeader_t vend_hdr;
     /** IE Max - size of previous fields */
 	t_u8 data[IEEE_MAX_IE_SIZE - sizeof(IEEEtypes_VendorHeader_t)];
-}
-MLAN_PACK_END IEEEtypes_VendorSpecific_t, *pIEEEtypes_VendorSpecific_t;
+} MLAN_PACK_END IEEEtypes_VendorSpecific_t, *pIEEEtypes_VendorSpecific_t;
 
 /** IEEE IE */
 typedef MLAN_PACK_START struct _IEEEtypes_Generic_t {
@@ -139,8 +148,7 @@ typedef MLAN_PACK_START struct _IEEEtypes_Generic_t {
 	IEEEtypes_Header_t ieee_hdr;
     /** IE Max - size of previous fields */
 	t_u8 data[IEEE_MAX_IE_SIZE - sizeof(IEEEtypes_Header_t)];
-}
-MLAN_PACK_END IEEEtypes_Generic_t, *pIEEEtypes_Generic_t;
+} MLAN_PACK_END IEEEtypes_Generic_t, *pIEEEtypes_Generic_t;
 
 /** TLV header */
 typedef MLAN_PACK_START struct _TLV_Generic_t {
@@ -151,8 +159,8 @@ typedef MLAN_PACK_START struct _TLV_Generic_t {
 } MLAN_PACK_END TLV_Generic_t, *pTLV_Generic_t;
 
 /** Capability information mask */
-#define CAPINFO_MASK    (~(MBIT(15) | MBIT(14) |            \
-							MBIT(12) | MBIT(11) | MBIT(9)))
+#define CAPINFO_MASK \
+(~(MBIT(15) | MBIT(14) | MBIT(12) | MBIT(11) | MBIT(9)))
 
 /** Capability Bit Map*/
 #ifdef BIG_ENDIAN_SUPPORT
@@ -315,9 +323,21 @@ typedef t_u8 WLAN_802_11_RATES[WLAN_SUPPORTED_RATES];
 /** AKM: 8021x */
 #define RSN_AKM_8021X		1
 /** AKM: PSK */
-#define RSN_AKM_PSK     	2
+#define RSN_AKM_PSK         2
 /** AKM: PSK SHA256 */
 #define RSN_AKM_PSK_SHA256	6
+#if defined(STA_SUPPORT)
+/** Pairwise Cipher Suite length */
+#define PAIRWISE_CIPHER_SUITE_LEN    4
+/** AKM Suite length */
+#define AKM_SUITE_LEN    4
+/** MFPC bit in RSN capability */
+#define MFPC_BIT    7
+/** MFPR bit in RSN capability */
+#define MFPR_BIT    6
+/** PMF ORing mask */
+#define PMF_MASK    0x00c0
+#endif
 
 /** wpa_suite_t */
 typedef MLAN_PACK_START struct _wpa_suite_t {
@@ -722,6 +742,20 @@ typedef MLAN_PACK_START struct _IEEEtypes_CountryInfoFullSet_t {
 
 #endif /* STA_SUPPORT */
 
+/** Data structure for Link ID */
+typedef MLAN_PACK_START struct _IEEEtypes_LinkIDElement_t {
+    /** Element ID */
+	t_u8 element_id;
+    /** Length */
+	t_u8 len;
+	/** bssid */
+	t_u8 bssid[MLAN_MAC_ADDR_LENGTH];
+	/** initial sta address */
+	t_u8 init_sta[MLAN_MAC_ADDR_LENGTH];
+	/** respose sta address */
+	t_u8 resp_sta[MLAN_MAC_ADDR_LENGTH];
+} MLAN_PACK_END IEEEtypes_LinkIDElement_t, *pIEEEtypes_LinkIDElement_t;
+
 /** HT Capabilities Data */
 typedef struct MLAN_PACK_START _HTCap_t {
     /** HT Capabilities Info field */
@@ -957,8 +991,183 @@ typedef MLAN_PACK_START struct _IEEEtypes_OverlapBSSScanParam_t {
 } MLAN_PACK_END IEEEtypes_OverlapBSSScanParam_t,
 	*pIEEEtypes_OverlapBSSScanParam_t;
 
+/** Maximum number of subbands in the IEEEtypes_SupportedChannels_t structure */
+#define WLAN_11H_MAX_SUBBANDS  5
+
+/** Maximum number of DFS channels configured in IEEEtypes_IBSS_DFS_t */
+#define WLAN_11H_MAX_IBSS_DFS_CHANNELS 25
+
+/**  IEEE Power Constraint element (7.3.2.15) */
+typedef MLAN_PACK_START struct {
+	t_u8 element_id;    /**< IEEE Element ID = 32 */
+	t_u8 len;	    /**< Element length after id and len */
+	t_u8 local_constraint;
+			    /**< Local power constraint applied to 11d
+                             chan info */
+} MLAN_PACK_END IEEEtypes_PowerConstraint_t;
+
+/**  IEEE Power Capability element (7.3.2.16) */
+typedef MLAN_PACK_START struct {
+	t_u8 element_id;	    /**< IEEE Element ID = 33 */
+	t_u8 len;		    /**< Element length after id and len */
+	t_s8 min_tx_power_capability;
+				    /**< Minimum Transmit power (dBm) */
+	t_s8 max_tx_power_capability;
+				    /**< Maximum Transmit power (dBm) */
+} MLAN_PACK_END IEEEtypes_PowerCapability_t;
+
+/**  IEEE TPC Report element (7.3.2.18) */
+typedef MLAN_PACK_START struct {
+	t_u8 element_id;/**< IEEE Element ID = 35 */
+	t_u8 len;	/**< Element length after id and len */
+	t_s8 tx_power;	/**< Max power used to transmit the TPC Report frame (dBm) */
+	t_s8 link_margin;
+			/**< Link margin when TPC Request received (dB) */
+} MLAN_PACK_END IEEEtypes_TPCReport_t;
+
+/*  IEEE Supported Channel sub-band description (7.3.2.19) */
+/**
+ *  Sub-band description used in the supported channels element.
+ */
+typedef MLAN_PACK_START struct {
+	t_u8 start_chan;/**< Starting channel in the subband */
+	t_u8 num_chans;	/**< Number of channels in the subband */
+
+} MLAN_PACK_END IEEEtypes_SupportChan_Subband_t;
+
+/*  IEEE Supported Channel element (7.3.2.19) */
+/**
+ *  Sent in association requests. Details the sub-bands and number
+ *    of channels supported in each subband
+ */
+typedef MLAN_PACK_START struct {
+	t_u8 element_id;/**< IEEE Element ID = 36 */
+	t_u8 len;	/**< Element length after id and len */
+
+    /** Configured sub-bands information in the element */
+	IEEEtypes_SupportChan_Subband_t subband[WLAN_11H_MAX_SUBBANDS];
+
+} MLAN_PACK_END IEEEtypes_SupportedChannels_t;
+
+/*  IEEE Channel Switch Announcement Element (7.3.2.20) */
+/**
+ *  Provided in beacons and probe responses.  Used to advertise when
+ *    and to which channel it is changing to.  Only starting STAs in
+ *    an IBSS and APs are allowed to originate a chan switch element.
+ */
+typedef MLAN_PACK_START struct {
+	t_u8 element_id;	/**< IEEE Element ID = 37 */
+	t_u8 len;		/**< Element length after id and len */
+	t_u8 chan_switch_mode;	/**< STA should not transmit any frames if 1 */
+	t_u8 new_channel_num;	/**< Channel # that AP/IBSS is moving to */
+	t_u8 chan_switch_count;	/**< # of TBTTs before channel switch */
+
+} MLAN_PACK_END IEEEtypes_ChanSwitchAnn_t;
+
+/*  IEEE Quiet Period Element (7.3.2.23) */
+/**
+ *  Provided in beacons and probe responses.  Indicates times during
+ *    which the STA should not be transmitting data.  Only starting STAs in
+ *    an IBSS and APs are allowed to originate a quiet element.
+ */
+typedef MLAN_PACK_START struct {
+	t_u8 element_id;    /**< IEEE Element ID = 40 */
+	t_u8 len;	    /**< Element length after id and len */
+	t_u8 quiet_count;   /**< Number of TBTTs until beacon with the quiet period */
+	t_u8 quiet_period;  /**< Regular quiet period, # of TBTTS between periods */
+	t_u16 quiet_duration;
+			    /**< Duration of the quiet period in TUs */
+	t_u16 quiet_offset; /**< Offset in TUs from the TBTT for the quiet period */
+
+} MLAN_PACK_END IEEEtypes_Quiet_t;
+
+/**
+***  @brief Map octet of the basic measurement report (7.3.2.22.1)
+**/
+typedef MLAN_PACK_START struct {
+#ifdef BIG_ENDIAN_SUPPORT
+    /**< Reserved */
+	t_u8 rsvd5_7:3;
+    /**< Channel is unmeasured */
+	t_u8 unmeasured:1;
+    /**< Radar detected on channel */
+	t_u8 radar:1;
+    /**< Unidentified signal found on channel */
+	t_u8 unidentified_sig:1;
+    /**< OFDM preamble detected on channel */
+	t_u8 ofdm_preamble:1;
+    /**< At least one valid MPDU received on channel */
+	t_u8 bss:1;
+#else
+    /**< At least one valid MPDU received on channel */
+	t_u8 bss:1;
+    /**< OFDM preamble detected on channel */
+	t_u8 ofdm_preamble:1;
+    /**< Unidentified signal found on channel */
+	t_u8 unidentified_sig:1;
+    /**< Radar detected on channel */
+	t_u8 radar:1;
+    /**< Channel is unmeasured */
+	t_u8 unmeasured:1;
+    /**< Reserved */
+	t_u8 rsvd5_7:3;
+#endif				/* BIG_ENDIAN_SUPPORT */
+
+} MLAN_PACK_END MeasRptBasicMap_t;
+
+/*  IEEE DFS Channel Map field (7.3.2.24) */
+/**
+ *  Used to list supported channels and provide a octet "map" field which
+ *    contains a basic measurement report for that channel in the
+ *    IEEEtypes_IBSS_DFS_t element
+ */
+typedef MLAN_PACK_START struct {
+	t_u8 channel_number;	/**< Channel number */
+	MeasRptBasicMap_t rpt_map;
+				/**< Basic measurement report for the channel */
+
+} MLAN_PACK_END IEEEtypes_ChannelMap_t;
+
+/*  IEEE IBSS DFS Element (7.3.2.24) */
+/**
+ *  IBSS DFS element included in ad hoc beacons and probe responses.
+ *    Provides information regarding the IBSS DFS Owner as well as the
+ *    originating STAs supported channels and basic measurement results.
+ */
+typedef MLAN_PACK_START struct {
+	t_u8 element_id;		    /**< IEEE Element ID = 41 */
+	t_u8 len;			    /**< Element length after id and len */
+	t_u8 dfs_owner[MLAN_MAC_ADDR_LENGTH];
+					    /**< DFS Owner STA Address */
+	t_u8 dfs_recovery_interval;	    /**< DFS Recovery time in TBTTs */
+
+    /** Variable length map field, one Map entry for each supported channel */
+	IEEEtypes_ChannelMap_t channel_map[WLAN_11H_MAX_IBSS_DFS_CHANNELS];
+
+} MLAN_PACK_END IEEEtypes_IBSS_DFS_t;
+
+/* 802.11h BSS information kept for each BSSID received in scan results */
+/**
+ * IEEE BSS information needed from scan results for later processing in
+ *    join commands
+ */
+typedef struct {
+	t_u8 sensed_11h;
+		      /**< Capability bit set or 11h IE found in this BSS */
+
+	IEEEtypes_PowerConstraint_t power_constraint;
+						  /**< Power Constraint IE */
+	IEEEtypes_PowerCapability_t power_capability;
+						  /**< Power Capability IE */
+	IEEEtypes_TPCReport_t tpc_report;	  /**< TPC Report IE */
+	IEEEtypes_ChanSwitchAnn_t chan_switch_ann;/**< Channel Switch Announcement IE */
+	IEEEtypes_Quiet_t quiet;		  /**< Quiet IE */
+	IEEEtypes_IBSS_DFS_t ibss_dfs;		  /**< IBSS DFS Element IE */
+
+} wlan_11h_bss_info_t;
+
 /** Ethernet packet type for TDLS */
-#define MLAN_ETHER_PKT_TYPE_TDLS_ACTION	(0x890D)
+#define MLAN_ETHER_PKT_TYPE_TDLS_ACTION (0x890D)
 
 /*802.11z  TDLS action frame type and strcuct */
 typedef MLAN_PACK_START struct {
@@ -998,6 +1207,8 @@ typedef MLAN_PACK_START struct {
 #define TDLS_DISCOVERY_REQUEST 10
 /** action code for TDLS discovery response */
 #define TDLS_DISCOVERY_RESPONSE 14
+/** category public */
+#define CATEGORY_PUBLIC         4
 
 #ifdef STA_SUPPORT
 /** Macro for maximum size of scan response buffer */
@@ -1043,6 +1254,24 @@ typedef MLAN_PACK_START struct _wlan_user_scan_chan {
     /** Scan duration in milliseconds; if 0 default used */
 	t_u32 scan_time;
 } MLAN_PACK_END wlan_user_scan_chan;
+
+/** channel statictics */
+typedef MLAN_PACK_START struct _ChanStatistics_t {
+    /** channle number */
+	t_u8 chan_num;
+	/** band info */
+	t_u8 bandconfig;
+	/** flags */
+	t_u8 flags;
+	/** noise */
+	t_s8 noise;
+	/** total network */
+	t_u16 total_networks;
+	/** scan duration */
+	t_u16 cca_scan_duration;
+	/** busy duration */
+	t_u16 cca_busy_duration;
+} MLAN_PACK_END ChanStatistics_t;
 
 /**
  *  Input structure to configure an immediate scan cmd to firmware
@@ -1090,6 +1319,8 @@ typedef MLAN_PACK_START struct {
      *  Variable number (fixed maximum) of channels to scan up
      */
 	wlan_user_scan_chan chan_list[WLAN_USER_SCAN_CHAN_MAX];
+    /** scan channel gap */
+	t_u16 scan_chan_gap;
 } MLAN_PACK_END wlan_user_scan_cfg;
 
 /** Default scan interval in millisecond*/
@@ -1109,6 +1340,8 @@ typedef MLAN_PACK_START struct {
 #define BG_SCAN_SSID_MATCH			0x0001
 /** ssid match and RSSI exceeded */
 #define BG_SCAN_SSID_RSSI_MATCH		0x0004
+/**wait for all channel scan to complete to report scan result*/
+#define BG_SCAN_WAIT_ALL_CHAN_DONE  0x80000000
 /** Maximum number of channels that can be sent in bg scan config */
 #define WLAN_BG_SCAN_CHAN_MAX       38
 
@@ -1149,6 +1382,8 @@ typedef MLAN_PACK_START struct {
 	wlan_user_scan_ssid ssid_list[MRVDRV_MAX_SSID_LIST_LENGTH];
     /** Variable number (fixed maximum) of channels to scan up */
 	wlan_user_scan_chan chan_list[WLAN_BG_SCAN_CHAN_MAX];
+    /** scan channel gap */
+	t_u16 scan_chan_gap;
 } MLAN_PACK_END wlan_bgscan_cfg;
 #endif /* STA_SUPPORT */
 
@@ -1224,6 +1459,9 @@ typedef struct _BSSDescriptor_t {
     /** WMM IE */
 	IEEEtypes_WmmParameter_t wmm_ie;
 
+    /** 802.11h BSS information */
+	wlan_11h_bss_info_t wlan_11h_bss_info;
+
     /** Indicate disabling 11n when associate with AP */
 	t_u8 disable_11n;
     /** 802.11n BSS information */
@@ -1267,6 +1505,10 @@ typedef struct _BSSDescriptor_t {
     /** WAPI IE offset in the beacon buffer */
 	t_u16 wapi_offset;
 #endif
+	/* Hotspot 2.0 OSEN AKM IE */
+	IEEEtypes_Generic_t *posen_ie;
+    /** osen IE offset in the beacon buffer */
+	t_u16 osen_offset;
 
     /** Pointer to the returned scan response */
 	t_u8 *pbeacon_buf;

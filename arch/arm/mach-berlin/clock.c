@@ -147,8 +147,24 @@ static struct clk twd_clk = {
 	.ops	= &twd_clk_ops,
 };
 
+static unsigned long cfg_get_rate(struct clk *clk)
+{
+	unsigned long pll = get_pll(clk);
+	u32 divider = cfg_get_divider();
+	return 1000000*pll/divider;
+}
+
+static struct clkops cfg_clk_ops = {
+	.getrate	= cfg_get_rate,
+};
+
+static struct clk cfg_clk = {
+	.ctl	= RA_GBL_SYSPLLCTL,
+	.ctl1	= RA_GBL_SYSPLLCTL1,
+	.ops	= &cfg_clk_ops,
+};
+
 CLK(cpu0, RA_GBL_CPUPLLCTL, RA_GBL_CPUPLLCTL1);
-CLK(cfg, RA_GBL_SYSPLLCTL, RA_GBL_SYSPLLCTL1);
 CLK(perif, RA_GBL_SYSPLLCTL, RA_GBL_SYSPLLCTL1);
 CLK(sdioxin, RA_GBL_SYSPLLCTL, RA_GBL_SYSPLLCTL1);
 CLK(sdio1xin, RA_GBL_SYSPLLCTL, RA_GBL_SYSPLLCTL1);
@@ -172,7 +188,7 @@ void __init berlin_clk_init(void)
 {
 	clkdev_add_table(clks, ARRAY_SIZE(clks));
 }
-
+#if 0
 int clk_enable(struct clk *clk)
 {
 	return 0;
@@ -183,7 +199,7 @@ void clk_disable(struct clk *clk)
 {
 }
 EXPORT_SYMBOL(clk_disable);
-
+#endif
 unsigned long clk_get_rate(struct clk *clk)
 {
 	unsigned long rate;
@@ -196,3 +212,4 @@ unsigned long clk_get_rate(struct clk *clk)
 	return rate;
 }
 EXPORT_SYMBOL(clk_get_rate);
+

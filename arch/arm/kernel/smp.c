@@ -584,12 +584,28 @@ asmlinkage void __exception_irq_entry do_IPI(int ipinr, struct pt_regs *regs)
 	handle_IPI(ipinr, regs);
 }
 
+#define IPI_USER        (0xF)
+static void (*_user_ipi_handler)(void *data);
+static void *_user_ipi_data;
+void register_user_ipi(void (*handler)(void *), void *data)
+{
+	_user_ipi_handler = handler;
+	_user_ipi_data = data;
+}
+EXPORT_SYMBOL(register_user_ipi);
+void release_user_ipi(void)
+{
+	_user_ipi_handler = NULL;
+	_user_ipi_data = NULL;
+}
+EXPORT_SYMBOL(release_user_ipi);
+
 void handle_IPI(int ipinr, struct pt_regs *regs)
 {
 	unsigned int cpu = smp_processor_id();
 	struct pt_regs *old_regs = set_irq_regs(regs);
 
-	if (ipinr < NR_IPI)
+	if (ipinr < NR_IPI || ipinr == IPI_USER)
 		__inc_irq_stat(cpu, ipi_irqs[ipinr]);
 
 	switch (ipinr) {
@@ -622,6 +638,13 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 		irq_enter();
 		ipi_cpu_stop(cpu);
 		irq_exit();
+		break;
+	case IPI_USER:
+		if (_user_ipi_handler != NULL) {
+			irq_enter();
+			_user_ipi_handler(_user_ipi_data);
+			irq_exit();
+		}
 		break;
 
 	default:

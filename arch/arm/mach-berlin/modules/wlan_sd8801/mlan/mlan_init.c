@@ -34,7 +34,12 @@ Change log:
 #include "mlan_init.h"
 #include "mlan_wmm.h"
 #include "mlan_11n.h"
+#include "mlan_11h.h"
+#include "mlan_meas.h"
 #include "mlan_sdio.h"
+#if defined(DRV_EMBEDDED_AUTHENTICATOR) || defined(DRV_EMBEDDED_SUPPLICANT)
+#include "hostsa_init.h"
+#endif
 
 /********************************************************
 			Global Variables
@@ -63,7 +68,7 @@ wlan_add_bsspriotbl(pmlan_private priv)
 	status = pmadapter->callbacks.moal_malloc(pmadapter->pmoal_handle,
 						  sizeof(mlan_bssprio_node),
 						  MLAN_MEM_DEF,
-						  (t_u8 **) & pbssprio);
+						  (t_u8 **)&pbssprio);
 	if (status) {
 		PRINTM(MERROR, "Failed to allocate bsspriotbl\n");
 		LEAVE();
@@ -72,7 +77,7 @@ wlan_add_bsspriotbl(pmlan_private priv)
 
 	pbssprio->priv = priv;
 
-	util_init_list((pmlan_linked_list) pbssprio);
+	util_init_list((pmlan_linked_list)pbssprio);
 
 	if (!pmadapter->bssprio_tbl[priv->bss_priority].bssprio_cur)
 		pmadapter->bssprio_tbl[priv->bss_priority].bssprio_cur
@@ -80,7 +85,7 @@ wlan_add_bsspriotbl(pmlan_private priv)
 
 	util_enqueue_list_tail(pmadapter->pmoal_handle,
 			       &pmadapter->bssprio_tbl[priv->bss_priority].
-			       bssprio_head, (pmlan_linked_list) pbssprio,
+			       bssprio_head, (pmlan_linked_list)pbssprio,
 			       pmadapter->callbacks.moal_spin_lock,
 			       pmadapter->callbacks.moal_spin_unlock);
 
@@ -114,17 +119,17 @@ wlan_delete_bsspriotbl(pmlan_private priv)
 		       priv->bss_index, i, phead, *ppcur);
 		if (*ppcur) {
 			pbssprio_node =
-				(mlan_bssprio_node *) util_peek_list(pmadapter->
-								     pmoal_handle,
-								     phead,
-								     pmadapter->
-								     callbacks.
-								     moal_spin_lock,
-								     pmadapter->
-								     callbacks.
-								     moal_spin_unlock);
+				(mlan_bssprio_node *)util_peek_list(pmadapter->
+								    pmoal_handle,
+								    phead,
+								    pmadapter->
+								    callbacks.
+								    moal_spin_lock,
+								    pmadapter->
+								    callbacks.
+								    moal_spin_unlock);
 			while (pbssprio_node &&
-			       ((pmlan_list_head) pbssprio_node != phead)) {
+			       ((pmlan_list_head)pbssprio_node != phead)) {
 				ptmp_node = pbssprio_node->pnext;
 				if (pbssprio_node->priv == priv) {
 					PRINTM(MINFO,
@@ -146,7 +151,7 @@ wlan_delete_bsspriotbl(pmlan_private priv)
 				}
 				pbssprio_node = ptmp_node;
 			}
-			*ppcur = (mlan_bssprio_node *) phead;
+			*ppcur = (mlan_bssprio_node *)phead;
 		}
 	}
 
@@ -172,6 +177,21 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 #ifdef STA_SUPPORT
 	t_u32 buf_size;
 	BSSDescriptor_t *ptemp_scan_table = MNULL;
+	t_u8 i = 0;
+	t_u8 chan_2g[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+	t_u8 chan_5g[] = {
+		12, 16, 34, 38, 42, 46, 36, 40, 44,
+		48, 52, 56, 60, 64, 100, 104, 108,
+		112, 116, 120, 124, 128, 132, 136,
+		140, 144, 149, 153, 157, 161, 165
+	};
+#endif
+	t_u32 max_mp_regs = pmadapter->psdio_device->reg->max_mp_regs;
+#if defined(SDIO_MULTI_PORT_TX_AGGR) || defined(SDIO_MULTI_PORT_RX_AGGR)
+	t_u32 mp_tx_aggr_buf_size =
+		pmadapter->psdio_device->mp_tx_aggr_buf_size;
+	t_u32 mp_rx_aggr_buf_size =
+		pmadapter->psdio_device->mp_rx_aggr_buf_size;
 #endif
 
 	ENTER();
@@ -183,13 +203,13 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 	    pmadapter->callbacks.moal_vfree)
 		ret = pmadapter->callbacks.moal_vmalloc(pmadapter->pmoal_handle,
 							buf_size,
-							(t_u8 **) &
-							ptemp_scan_table);
+							(t_u8 **)
+							&ptemp_scan_table);
 	else
 		ret = pmadapter->callbacks.moal_malloc(pmadapter->pmoal_handle,
 						       buf_size, MLAN_MEM_DEF,
-						       (t_u8 **) &
-						       ptemp_scan_table);
+						       (t_u8 **)
+						       &ptemp_scan_table);
 	if (ret != MLAN_STATUS_SUCCESS || !ptemp_scan_table) {
 		PRINTM(MERROR, "Failed to allocate scan table\n");
 		LEAVE();
@@ -200,13 +220,13 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 	    pmadapter->callbacks.moal_vfree)
 		ret = pmadapter->callbacks.moal_vmalloc(pmadapter->pmoal_handle,
 							DEFAULT_SCAN_BEACON_BUFFER,
-							(t_u8 **) & pmadapter->
+							(t_u8 **)&pmadapter->
 							bcn_buf);
 	else
 		ret = pmadapter->callbacks.moal_malloc(pmadapter->pmoal_handle,
 						       DEFAULT_SCAN_BEACON_BUFFER,
 						       MLAN_MEM_DEF,
-						       (t_u8 **) & pmadapter->
+						       (t_u8 **)&pmadapter->
 						       bcn_buf);
 	if (ret != MLAN_STATUS_SUCCESS || !pmadapter->bcn_buf) {
 		PRINTM(MERROR, "Failed to allocate bcn buf\n");
@@ -215,6 +235,32 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 	}
 	pmadapter->bcn_buf_size = DEFAULT_SCAN_BEACON_BUFFER;
 
+	pmadapter->num_in_chan_stats = sizeof(chan_2g);
+	pmadapter->num_in_chan_stats += sizeof(chan_5g);
+	buf_size = sizeof(ChanStatistics_t) * pmadapter->num_in_chan_stats;
+	if (pmadapter->callbacks.moal_vmalloc &&
+	    pmadapter->callbacks.moal_vfree)
+		ret = pmadapter->callbacks.moal_vmalloc(pmadapter->pmoal_handle,
+							buf_size,
+							(t_u8 **)&pmadapter->
+							pchan_stats);
+	else
+		ret = pmadapter->callbacks.moal_malloc(pmadapter->pmoal_handle,
+						       buf_size, MLAN_MEM_DEF,
+						       (t_u8 **)&pmadapter->
+						       pchan_stats);
+	if (ret != MLAN_STATUS_SUCCESS || !pmadapter->pchan_stats) {
+		PRINTM(MERROR, "Failed to allocate channel statistics\n");
+		LEAVE();
+		return MLAN_STATUS_FAILURE;
+	}
+	for (i = 0; i < pmadapter->num_in_chan_stats; i++) {
+		if (i < sizeof(chan_2g))
+			pmadapter->pchan_stats[i].chan_num = chan_2g[i];
+		else
+			pmadapter->pchan_stats[i].chan_num =
+				chan_5g[i - sizeof(chan_2g)];
+	}
 #endif
 
 	/* Allocate command buffer */
@@ -226,9 +272,9 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 	}
 
 	ret = pmadapter->callbacks.moal_malloc(pmadapter->pmoal_handle,
-					       MAX_MP_REGS + DMA_ALIGNMENT,
+					       max_mp_regs + DMA_ALIGNMENT,
 					       MLAN_MEM_DEF | MLAN_MEM_DMA,
-					       (t_u8 **) & pmadapter->
+					       (t_u8 **)&pmadapter->
 					       mp_regs_buf);
 	if (ret != MLAN_STATUS_SUCCESS || !pmadapter->mp_regs_buf) {
 		PRINTM(MERROR, "Failed to allocate mp_regs_buf\n");
@@ -236,16 +282,44 @@ wlan_allocate_adapter(pmlan_adapter pmadapter)
 		return MLAN_STATUS_FAILURE;
 	}
 	pmadapter->mp_regs =
-		(t_u8 *) ALIGN_ADDR(pmadapter->mp_regs_buf, DMA_ALIGNMENT);
+		(t_u8 *)ALIGN_ADDR(pmadapter->mp_regs_buf, DMA_ALIGNMENT);
 
 #if defined(SDIO_MULTI_PORT_TX_AGGR) || defined(SDIO_MULTI_PORT_RX_AGGR)
-	ret = wlan_alloc_sdio_mpa_buffers(pmadapter,
-					  SDIO_MP_TX_AGGR_DEF_BUF_SIZE,
-					  SDIO_MP_RX_AGGR_DEF_BUF_SIZE);
+	ret = wlan_alloc_sdio_mpa_buffers(pmadapter, mp_tx_aggr_buf_size,
+					  mp_rx_aggr_buf_size);
 	if (ret != MLAN_STATUS_SUCCESS) {
 		PRINTM(MERROR, "Failed to allocate sdio mp-a buffers\n");
 		LEAVE();
 		return MLAN_STATUS_FAILURE;
+	}
+	if (mlan_drvdbg & MMPA_D) {
+		pmadapter->mpa_buf_size =
+			SDIO_MP_DBG_NUM *
+			pmadapter->psdio_device->mp_aggr_pkt_limit *
+			MLAN_SDIO_BLOCK_SIZE;
+		if (pmadapter->callbacks.moal_vmalloc &&
+		    pmadapter->callbacks.moal_vfree)
+			ret = pmadapter->callbacks.moal_vmalloc(pmadapter->
+								pmoal_handle,
+								pmadapter->
+								mpa_buf_size,
+								(t_u8 **)
+								&pmadapter->
+								mpa_buf);
+		else
+			ret = pmadapter->callbacks.moal_malloc(pmadapter->
+							       pmoal_handle,
+							       pmadapter->
+							       mpa_buf_size,
+							       MLAN_MEM_DEF,
+							       (t_u8 **)
+							       &pmadapter->
+							       mpa_buf);
+		if (ret != MLAN_STATUS_SUCCESS || !pmadapter->mpa_buf) {
+			PRINTM(MERROR, "Failed to allocate mpa buf\n");
+			LEAVE();
+			return MLAN_STATUS_FAILURE;
+		}
 	}
 #endif
 
@@ -292,6 +366,7 @@ wlan_init_priv(pmlan_private priv)
 	for (i = 0; i < MRVL_NUM_WEP_KEY; i++)
 		memset(pmadapter, &priv->wep_key[i], 0, sizeof(mrvl_wep_key_t));
 	priv->wep_key_curr_index = 0;
+	priv->ewpa_query = MFALSE;
 	priv->adhoc_aes_enabled = MFALSE;
 	priv->curr_pkt_filter =
 		HostCmd_ACT_MAC_RTS_CTS_ENABLE |
@@ -308,6 +383,7 @@ wlan_init_priv(pmlan_private priv)
 	priv->assoc_rsp_size = 0;
 
 	wlan_11d_priv_init(priv);
+	wlan_11h_priv_init(priv);
 #ifdef UAP_SUPPORT
 	priv->uap_bss_started = MFALSE;
 	memset(pmadapter, &priv->uap_state_chan_cb, 0,
@@ -315,6 +391,11 @@ wlan_init_priv(pmlan_private priv)
 #endif
 #if defined(UAP_SUPPORT)
 	priv->num_drop_pkts = 0;
+#endif
+#if defined(STA_SUPPORT)
+	priv->adhoc_state_prev = ADHOC_IDLE;
+	memset(pmadapter, &priv->adhoc_last_start_ssid, 0,
+	       sizeof(priv->adhoc_last_start_ssid));
 #endif
 	priv->adhoc_channel = DEFAULT_AD_HOC_CHANNEL;
 	priv->atim_window = 0;
@@ -335,12 +416,17 @@ wlan_init_priv(pmlan_private priv)
 	priv->bcn_nf_avg = 0;
 	priv->bcn_nf_last = 0;
 
+	priv->sec_info.ewpa_enabled = MFALSE;
 	priv->sec_info.wpa_enabled = MFALSE;
 	priv->sec_info.wpa2_enabled = MFALSE;
 	memset(pmadapter, &priv->wpa_ie, 0, sizeof(priv->wpa_ie));
 	memset(pmadapter, &priv->aes_key, 0, sizeof(priv->aes_key));
 	priv->wpa_ie_len = 0;
 	priv->wpa_is_gtk_set = MFALSE;
+#if defined(STA_SUPPORT)
+	priv->pmfcfg.mfpc = 0;
+	priv->pmfcfg.mfpr = 0;
+#endif
 	priv->sec_info.wapi_enabled = MFALSE;
 	priv->wapi_ie_len = 0;
 	priv->sec_info.wapi_key_on = MFALSE;
@@ -349,12 +435,11 @@ wlan_init_priv(pmlan_private priv)
 	memset(pmadapter, &priv->gen_ie_buf, 0, sizeof(priv->gen_ie_buf));
 	priv->gen_ie_buf_len = 0;
 #endif /* STA_SUPPORT */
-
-	priv->tx_bf_cap = 0;
 	priv->wmm_required = MTRUE;
 	priv->wmm_enabled = MFALSE;
 	priv->wmm_qosinfo = 0;
 	priv->saved_wmm_qosinfo = 0;
+	priv->txaggrctrl = MTRUE;
 #ifdef STA_SUPPORT
 	priv->pcurr_bcn_buf = MNULL;
 	priv->curr_bcn_size = 0;
@@ -366,13 +451,44 @@ wlan_init_priv(pmlan_private priv)
 	priv->addba_reject[6] = ADDBA_RSP_STATUS_REJECT;
 	priv->addba_reject[7] = ADDBA_RSP_STATUS_REJECT;
 	priv->max_amsdu = 0;
+#ifdef STA_SUPPORT
+	if (priv->bss_type == MLAN_BSS_TYPE_STA) {
+		priv->add_ba_param.tx_win_size =
+			pmadapter->psdio_device->ampdu_info->
+			ampdu_sta_txwinsize;
+		priv->add_ba_param.rx_win_size = MLAN_STA_AMPDU_DEF_RXWINSIZE;
+	}
+#endif
+#ifdef WIFI_DIRECT_SUPPORT
+	if (priv->bss_type == MLAN_BSS_TYPE_WIFIDIRECT) {
+		priv->add_ba_param.tx_win_size =
+			pmadapter->psdio_device->ampdu_info->
+			ampdu_wfd_txrxwinsize;
+		priv->add_ba_param.rx_win_size =
+			pmadapter->psdio_device->ampdu_info->
+			ampdu_wfd_txrxwinsize;
+	}
+#endif
+#ifdef UAP_SUPPORT
+	if (priv->bss_type == MLAN_BSS_TYPE_UAP) {
+		priv->add_ba_param.tx_win_size =
+			pmadapter->psdio_device->ampdu_info->
+			ampdu_uap_txwinsize;
+		priv->add_ba_param.rx_win_size =
+			pmadapter->psdio_device->ampdu_info->
+			ampdu_uap_rxwinsize;
+	}
+#endif
 
 	priv->port_ctrl_mode = MTRUE;
 
 	priv->port_open = MFALSE;
 
 	ret = wlan_add_bsspriotbl(priv);
-
+#if defined(DRV_EMBEDDED_AUTHENTICATOR) || defined(DRV_EMBEDDED_SUPPLICANT)
+	if (priv->adapter->psdio_device->driver_supplicant_auth)
+		hostsa_init(priv);
+#endif
 	LEAVE();
 	return ret;
 }
@@ -392,9 +508,9 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 	ENTER();
 
 	sleep_cfm_buf =
-		(opt_sleep_confirm_buffer *) (pmadapter->psleep_cfm->pbuf +
-					      pmadapter->psleep_cfm->
-					      data_offset);
+		(opt_sleep_confirm_buffer *)(pmadapter->psleep_cfm->pbuf +
+					     pmadapter->psleep_cfm->
+					     data_offset);
 
 #ifdef MFG_CMD_SUPPORT
 	if (pmadapter->init_para.mfg_mode == MLAN_INIT_PARA_DISABLED)
@@ -413,10 +529,18 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 	pmadapter->data_sent = MTRUE;
 	pmadapter->mp_rd_bitmap = 0;
 	pmadapter->mp_wr_bitmap = 0;
-	pmadapter->curr_rd_port = 1;
-	pmadapter->curr_wr_port = 1;
-	pmadapter->mp_data_port_mask = DATA_PORT_MASK;
-
+	if (pmadapter->psdio_device->supports_sdio_new_mode) {
+		pmadapter->curr_rd_port = 0;
+		pmadapter->curr_wr_port = 0;
+	} else {
+		pmadapter->curr_rd_port = 1;
+		pmadapter->curr_wr_port = 1;
+	}
+	pmadapter->mp_data_port_mask =
+		pmadapter->psdio_device->reg->data_port_mask;
+	pmadapter->mp_invalid_update = 0;
+	memset(pmadapter, pmadapter->mp_update, 0,
+	       sizeof(pmadapter->mp_update));
 #ifdef SDIO_MULTI_PORT_TX_AGGR
 	pmadapter->mpa_tx.buf_len = 0;
 	pmadapter->mpa_tx.pkt_cnt = 0;
@@ -428,7 +552,8 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 		pmadapter->mpa_tx.enabled = MFALSE;
 	else
 		pmadapter->mpa_tx.enabled = MTRUE;
-	pmadapter->mpa_tx.pkt_aggr_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT;
+	pmadapter->mpa_tx.pkt_aggr_limit =
+		pmadapter->psdio_device->mp_aggr_pkt_limit;
 #endif /* SDIO_MULTI_PORT_TX_AGGR */
 
 #ifdef SDIO_MULTI_PORT_RX_AGGR
@@ -442,7 +567,9 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 		pmadapter->mpa_rx.enabled = MFALSE;
 	else
 		pmadapter->mpa_rx.enabled = MTRUE;
-	pmadapter->mpa_rx.pkt_aggr_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT;
+	pmadapter->mpa_rx.pkt_aggr_limit =
+		pmadapter->psdio_device->mp_aggr_pkt_limit;
+
 #endif /* SDIO_MULTI_PORT_RX_AGGR */
 
 	pmadapter->cmd_resp_received = MFALSE;
@@ -459,11 +586,10 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 
 	if (!pmadapter->init_para.ps_mode) {
 		pmadapter->ps_mode = DEFAULT_PS_MODE;
-	} else if (pmadapter->init_para.ps_mode == MLAN_INIT_PARA_DISABLED) {
+	} else if (pmadapter->init_para.ps_mode == MLAN_INIT_PARA_DISABLED)
 		pmadapter->ps_mode = Wlan802_11PowerModeCAM;
-	} else {
+	else
 		pmadapter->ps_mode = Wlan802_11PowerModePSP;
-	}
 	pmadapter->ps_state = PS_STATE_AWAKE;
 	pmadapter->need_to_wakeup = MFALSE;
 
@@ -481,7 +607,7 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 	pmadapter->num_in_scan_table = 0;
 	memset(pmadapter, pmadapter->pscan_table, 0,
 	       (sizeof(BSSDescriptor_t) * MRVDRV_MAX_BSSID_LIST));
-	pmadapter->ext_scan = 0;
+	pmadapter->ext_scan = pmadapter->psdio_device->ext_scan;
 	pmadapter->scan_probes = DEFAULT_PROBES;
 
 	memset(pmadapter, pmadapter->bcn_buf, 0, pmadapter->bcn_buf_size);
@@ -496,13 +622,12 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 
 	pmadapter->is_deep_sleep = MFALSE;
 	pmadapter->idle_time = DEEP_SLEEP_IDLE_TIME;
-	if (!pmadapter->init_para.auto_ds) {
+	if (!pmadapter->init_para.auto_ds)
 		pmadapter->init_auto_ds = DEFAULT_AUTO_DS_MODE;
-	} else if (pmadapter->init_para.auto_ds == MLAN_INIT_PARA_DISABLED) {
+	else if (pmadapter->init_para.auto_ds == MLAN_INIT_PARA_DISABLED)
 		pmadapter->init_auto_ds = MFALSE;
-	} else {
+	else
 		pmadapter->init_auto_ds = MTRUE;
-	}
 
 	pmadapter->delay_null_pkt = MFALSE;
 	pmadapter->delay_to_ps = DELAY_TO_PS_DEFAULT;
@@ -521,7 +646,7 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 		pmadapter->max_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K;
 	else
 		pmadapter->max_tx_buf_size =
-			(t_u16) pmadapter->init_para.max_tx_buf;
+			(t_u16)pmadapter->init_para.max_tx_buf;
 	pmadapter->tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K;
 	pmadapter->curr_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K;
 
@@ -539,6 +664,7 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 	pmadapter->usr_dot_11n_dev_cap_bg = 0;
 	pmadapter->usr_dot_11n_dev_cap_a = 0;
 	pmadapter->usr_dev_mcs_support = 0;
+	pmadapter->coex_rx_winsize = 1;
 #ifdef STA_SUPPORT
 	pmadapter->chan_bandwidth = 0;
 	pmadapter->adhoc_11n_enabled = MFALSE;
@@ -547,6 +673,8 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 
 	/* Initialize 802.11d */
 	wlan_11d_init(pmadapter);
+
+	wlan_11h_init(pmadapter);
 
 	wlan_wmm_init(pmadapter);
 	pmadapter->bypass_pkt_count = 0;
@@ -590,6 +718,13 @@ wlan_init_adapter(pmlan_adapter pmadapter)
 	       COUNTRY_CODE_LEN);
 	pmadapter->bcn_miss_time_out = DEFAULT_BCN_MISS_TIMEOUT;
 	pmadapter->adhoc_awake_period = 0;
+#ifdef STA_SUPPORT
+	memset(pmadapter, &pmadapter->arp_filter, 0,
+	       sizeof(pmadapter->arp_filter));
+	pmadapter->arp_filter_size = 0;
+#endif /* STA_SUPPORT */
+
+	pmadapter->mc_status = MFALSE;
 
 	LEAVE();
 	return;
@@ -673,28 +808,28 @@ wlan_init_lock_list(IN pmlan_adapter pmadapter)
 		}
 	}
 
-	util_init_list_head((t_void *) pmadapter->pmoal_handle,
+	util_init_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->rx_data_queue, MTRUE,
 			    pmadapter->callbacks.moal_init_lock);
-	util_scalar_init((t_void *) pmadapter->pmoal_handle,
+	util_scalar_init((t_void *)pmadapter->pmoal_handle,
 			 &pmadapter->rx_pkts_queued, 0,
 			 MNULL, pmadapter->callbacks.moal_init_lock);
 
 	/* Initialize cmd_free_q */
-	util_init_list_head((t_void *) pmadapter->pmoal_handle,
+	util_init_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->cmd_free_q, MTRUE,
 			    pmadapter->callbacks.moal_init_lock);
 	/* Initialize cmd_pending_q */
-	util_init_list_head((t_void *) pmadapter->pmoal_handle,
+	util_init_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->cmd_pending_q, MTRUE,
 			    pmadapter->callbacks.moal_init_lock);
 	/* Initialize scan_pending_q */
-	util_init_list_head((t_void *) pmadapter->pmoal_handle,
+	util_init_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->scan_pending_q, MTRUE,
 			    pmadapter->callbacks.moal_init_lock);
 
 	for (i = 0; i < pmadapter->priv_num; ++i) {
-		util_init_list_head((t_void *) pmadapter->pmoal_handle,
+		util_init_list_head((t_void *)pmadapter->pmoal_handle,
 				    &pmadapter->bssprio_tbl[i].bssprio_head,
 				    MTRUE, pmadapter->callbacks.moal_init_lock);
 		pmadapter->bssprio_tbl[i].bssprio_cur = MNULL;
@@ -704,41 +839,41 @@ wlan_init_lock_list(IN pmlan_adapter pmadapter)
 		if (pmadapter->priv[i]) {
 			priv = pmadapter->priv[i];
 			for (j = 0; j < MAX_NUM_TID; ++j) {
-				util_init_list_head((t_void *) pmadapter->
+				util_init_list_head((t_void *)pmadapter->
 						    pmoal_handle,
 						    &priv->wmm.tid_tbl_ptr[j].
 						    ra_list, MTRUE,
 						    priv->adapter->callbacks.
 						    moal_init_lock);
 			}
-			util_init_list_head((t_void *) pmadapter->pmoal_handle,
+			util_init_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->tx_ba_stream_tbl_ptr, MTRUE,
 					    pmadapter->callbacks.
 					    moal_init_lock);
-			util_init_list_head((t_void *) pmadapter->pmoal_handle,
+			util_init_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->rx_reorder_tbl_ptr, MTRUE,
 					    pmadapter->callbacks.
 					    moal_init_lock);
-			util_scalar_init((t_void *) pmadapter->pmoal_handle,
+			util_scalar_init((t_void *)pmadapter->pmoal_handle,
 					 &priv->wmm.tx_pkts_queued, 0,
 					 priv->wmm.ra_list_spinlock,
 					 pmadapter->callbacks.moal_init_lock);
-			util_scalar_init((t_void *) pmadapter->pmoal_handle,
+			util_scalar_init((t_void *)pmadapter->pmoal_handle,
 					 &priv->wmm.highest_queued_prio,
 					 HIGH_PRIO_TID,
 					 priv->wmm.ra_list_spinlock,
 					 pmadapter->callbacks.moal_init_lock);
-			util_init_list_head((t_void *) pmadapter->pmoal_handle,
+			util_init_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->sta_list, MTRUE,
 					    pmadapter->callbacks.
 					    moal_init_lock);
 			/* Initialize tdls_pending_txq */
-			util_init_list_head((t_void *) pmadapter->pmoal_handle,
+			util_init_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->tdls_pending_txq, MTRUE,
 					    pmadapter->callbacks.
 					    moal_init_lock);
 			/* Initialize bypass_txq */
-			util_init_list_head((t_void *) pmadapter->pmoal_handle,
+			util_init_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->bypass_txq, MTRUE,
 					    pmadapter->callbacks.
 					    moal_init_lock);
@@ -802,67 +937,67 @@ wlan_free_lock_list(IN pmlan_adapter pmadapter)
 	}
 
 	/* Free lists */
-	util_free_list_head((t_void *) pmadapter->pmoal_handle,
+	util_free_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->rx_data_queue, pcb->moal_free_lock);
 
-	util_scalar_free((t_void *) pmadapter->pmoal_handle,
+	util_scalar_free((t_void *)pmadapter->pmoal_handle,
 			 &pmadapter->rx_pkts_queued, pcb->moal_free_lock);
 
-	util_free_list_head((t_void *) pmadapter->pmoal_handle,
+	util_free_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->cmd_free_q,
 			    pmadapter->callbacks.moal_free_lock);
 
-	util_free_list_head((t_void *) pmadapter->pmoal_handle,
+	util_free_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->cmd_pending_q,
 			    pmadapter->callbacks.moal_free_lock);
 
-	util_free_list_head((t_void *) pmadapter->pmoal_handle,
+	util_free_list_head((t_void *)pmadapter->pmoal_handle,
 			    &pmadapter->scan_pending_q,
 			    pmadapter->callbacks.moal_free_lock);
 
 	for (i = 0; i < pmadapter->priv_num; i++)
-		util_free_list_head((t_void *) pmadapter->pmoal_handle,
+		util_free_list_head((t_void *)pmadapter->pmoal_handle,
 				    &pmadapter->bssprio_tbl[i].bssprio_head,
 				    pcb->moal_free_lock);
 
 	for (i = 0; i < pmadapter->priv_num; i++) {
 		if (pmadapter->priv[i]) {
 			priv = pmadapter->priv[i];
-			util_free_list_head((t_void *) pmadapter->pmoal_handle,
+			util_free_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->sta_list,
 					    priv->adapter->callbacks.
 					    moal_free_lock);
-			util_free_list_head((t_void *) pmadapter->pmoal_handle,
+			util_free_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->tdls_pending_txq,
 					    pmadapter->callbacks.
 					    moal_free_lock);
-			util_free_list_head((t_void *) pmadapter->pmoal_handle,
+			util_free_list_head((t_void *)pmadapter->pmoal_handle,
 					    &priv->bypass_txq,
 					    pmadapter->callbacks.
 					    moal_free_lock);
 
 			for (j = 0; j < MAX_NUM_TID; ++j)
-				util_free_list_head((t_void *) priv->adapter->
+				util_free_list_head((t_void *)priv->adapter->
 						    pmoal_handle,
 						    &priv->wmm.tid_tbl_ptr[j].
 						    ra_list,
 						    priv->adapter->callbacks.
 						    moal_free_lock);
-			util_free_list_head((t_void *) priv->adapter->
+			util_free_list_head((t_void *)priv->adapter->
 					    pmoal_handle,
 					    &priv->tx_ba_stream_tbl_ptr,
 					    priv->adapter->callbacks.
 					    moal_free_lock);
-			util_free_list_head((t_void *) priv->adapter->
+			util_free_list_head((t_void *)priv->adapter->
 					    pmoal_handle,
 					    &priv->rx_reorder_tbl_ptr,
 					    priv->adapter->callbacks.
 					    moal_free_lock);
-			util_scalar_free((t_void *) priv->adapter->pmoal_handle,
+			util_scalar_free((t_void *)priv->adapter->pmoal_handle,
 					 &priv->wmm.tx_pkts_queued,
 					 priv->adapter->callbacks.
 					 moal_free_lock);
-			util_scalar_free((t_void *) priv->adapter->pmoal_handle,
+			util_scalar_free((t_void *)priv->adapter->pmoal_handle,
 					 &priv->wmm.highest_queued_prio,
 					 priv->adapter->callbacks.
 					 moal_free_lock);
@@ -995,7 +1130,7 @@ done:
 t_void
 wlan_free_adapter(pmlan_adapter pmadapter)
 {
-	mlan_callbacks *pcb = (mlan_callbacks *) & pmadapter->callbacks;
+	mlan_callbacks *pcb = (mlan_callbacks *)&pmadapter->callbacks;
 	ENTER();
 
 	if (!pmadapter) {
@@ -1018,28 +1153,39 @@ wlan_free_adapter(pmlan_adapter pmadapter)
 #ifdef STA_SUPPORT
 	PRINTM(MINFO, "Free ScanTable\n");
 	if (pmadapter->pscan_table) {
-		if (pcb->moal_vmalloc && pcb->moal_vfree) {
+		if (pcb->moal_vmalloc && pcb->moal_vfree)
 			pcb->moal_vfree(pmadapter->pmoal_handle,
-					(t_u8 *) pmadapter->pscan_table);
-		} else
+					(t_u8 *)pmadapter->pscan_table);
+		else
 			pcb->moal_mfree(pmadapter->pmoal_handle,
-					(t_u8 *) pmadapter->pscan_table);
+					(t_u8 *)pmadapter->pscan_table);
 		pmadapter->pscan_table = MNULL;
+	}
+	if (pmadapter->pchan_stats) {
+		if (pcb->moal_vmalloc && pcb->moal_vfree)
+			pcb->moal_vfree(pmadapter->pmoal_handle,
+					(t_u8 *)pmadapter->pchan_stats);
+		else
+			pcb->moal_mfree(pmadapter->pmoal_handle,
+					(t_u8 *)pmadapter->pchan_stats);
+		pmadapter->pchan_stats = MNULL;
 	}
 	if (pmadapter->bcn_buf) {
 		if (pcb->moal_vmalloc && pcb->moal_vfree)
 			pcb->moal_vfree(pmadapter->pmoal_handle,
-					(t_u8 *) pmadapter->bcn_buf);
+					(t_u8 *)pmadapter->bcn_buf);
 		else
 			pcb->moal_mfree(pmadapter->pmoal_handle,
-					(t_u8 *) pmadapter->bcn_buf);
+					(t_u8 *)pmadapter->bcn_buf);
 		pmadapter->bcn_buf = MNULL;
 	}
 #endif
 
+	wlan_11h_cleanup(pmadapter);
+
 	if (pmadapter->mp_regs_buf) {
 		pcb->moal_mfree(pmadapter->pmoal_handle,
-				(t_u8 *) pmadapter->mp_regs_buf);
+				(t_u8 *)pmadapter->mp_regs_buf);
 		pmadapter->mp_regs_buf = MNULL;
 		pmadapter->mp_regs = MNULL;
 	}
@@ -1061,7 +1207,7 @@ wlan_free_adapter(pmlan_adapter pmadapter)
  *  @return         N/A
  */
 t_void
-wlan_free_priv(mlan_private * pmpriv)
+wlan_free_priv(mlan_private *pmpriv)
 {
 	ENTER();
 	wlan_clean_txrx(pmpriv);
@@ -1070,6 +1216,11 @@ wlan_free_priv(mlan_private * pmpriv)
 #ifdef STA_SUPPORT
 	wlan_free_curr_bcn(pmpriv);
 #endif /* STA_SUPPORT */
+
+#if defined(DRV_EMBEDDED_AUTHENTICATOR) || defined(DRV_EMBEDDED_SUPPLICANT)
+	if (pmpriv->adapter->psdio_device->driver_supplicant_auth)
+		hostsa_cleanup(pmpriv);
+#endif /* EMBEDDED AUTHENTICATOR */
 
 	wlan_delete_station_list(pmpriv);
 	LEAVE();
@@ -1081,7 +1232,7 @@ wlan_free_priv(mlan_private * pmpriv)
  *  @param pmadapter	A pointer to mlan_adapter structure
  *
  *  @return		MLAN_STATUS_SUCCESS
- *                      	The firmware initialization callback succeeded.
+ *              The firmware initialization callback succeeded.
  */
 mlan_status
 wlan_init_fw_complete(IN pmlan_adapter pmadapter)
@@ -1095,7 +1246,6 @@ wlan_init_fw_complete(IN pmlan_adapter pmadapter)
 	/* Check if hardware is ready */
 	if (pmadapter->hw_status != WlanHardwareStatusReady)
 		status = MLAN_STATUS_FAILURE;
-
 	/* Invoke callback */
 	ret = pcb->moal_init_fw_complete(pmadapter->pmoal_handle, status);
 	LEAVE();

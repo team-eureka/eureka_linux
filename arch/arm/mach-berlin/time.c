@@ -19,7 +19,9 @@
 #include <asm/mach/time.h>
 #include <asm/sched_clock.h>
 #include <asm/smp_twd.h>
+#include <asm/arch_timer.h>
 
+#include "common.h"
 static struct dw_apb_clocksource *cs;
 
 static void timer_get_base_and_rate(struct device_node *np,
@@ -85,6 +87,12 @@ static void __init apb_init(void)
 {
 	struct device_node *event_timer, *source_timer;
 
+	berlin_clk_init();
+
+	if (!arch_timer_of_register()) {
+		arch_timer_sched_clock_init();
+		return;
+	}
 	event_timer = of_find_matching_node(NULL, apb_timer_ids);
 	if (!event_timer)
 		panic("No timer for clockevent");

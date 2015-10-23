@@ -39,7 +39,7 @@ modules.builtin
 /tags
 /TAGS
 /linux
-/vmlinux*
+/vmlinux
 /vmlinuz
 /System.map
 /Module.markers

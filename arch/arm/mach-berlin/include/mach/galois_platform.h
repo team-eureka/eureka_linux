@@ -1,9 +1,29 @@
+/********************************************************************************
+ * Marvell GPL License Option
+ *
+ * If you received this File from Marvell, you may opt to use, redistribute and/or
+ * modify this File in accordance with the terms and conditions of the General
+ * Public License Version 2, June 1991 (the "GPL License"), a copy of which is
+ * available along with the File in the license.txt file or by writing to the Free
+ * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 or
+ * on the worldwide web at http://www.gnu.org/licenses/gpl.txt.
+ *
+ * THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE ARE EXPRESSLY
+ * DISCLAIMED.  The GPL License provides additional details about this warranty
+ * disclaimer.
+ ******************************************************************************/
+
 #ifndef __GALOIS_PLATFORM_H
 #define __GALOIS_PLATFORM_H
 
 #define MEMMAP_APBPERIF_REG_BASE	0xF7E80000
 #define MEMMAP_CHIP_CTRL_REG_BASE	0xF7EA0000
 #define MEMMAP_SM_REG_BASE		0xF7F80000
+
+#ifdef CONFIG_BERLIN2CDP
+#define MEMMAP_CA7_REG_BASE             0xF7920000
+#endif
 
 #define APB_GPIO_INST0_BASE		(MEMMAP_APBPERIF_REG_BASE + 0x0400)
 #define APB_GPIO_INST1_BASE		(MEMMAP_APBPERIF_REG_BASE + 0x0800)

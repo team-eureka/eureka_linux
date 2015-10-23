@@ -1599,24 +1599,4 @@ void dhub_channel_clear_seq(void *hdl, SIGN32 id, VIP_BCMBUF *pbcmbuf)
 /**	ENDOFFILE: hal_dhub.c
  */
 #include <linux/module.h>
-EXPORT_SYMBOL(dhub2d_channel_cfg);
-EXPORT_SYMBOL(dhub_channel_big_write_cmd);
-EXPORT_SYMBOL(dhub_channel_write_cmd);
-EXPORT_SYMBOL(semaphore_intr_enable);
-EXPORT_SYMBOL(semaphore_cfg);
-EXPORT_SYMBOL(dhub_semaphore);
-EXPORT_SYMBOL(dhub_channel_cfg);
-EXPORT_SYMBOL(dhub_channel_generate_cmd);
-EXPORT_SYMBOL(dhub_channel_clear_done);
-EXPORT_SYMBOL(dhub_channel_enable);
-EXPORT_SYMBOL(dhub_channel_clear);
-EXPORT_SYMBOL(dhub_hdl);
-EXPORT_SYMBOL(semaphore_chk_full);
-EXPORT_SYMBOL(semaphore_clr_full);
-EXPORT_SYMBOL(semaphore_pop);
-EXPORT_SYMBOL(BCM_SCHED_PushCmd);
-EXPORT_SYMBOL(BCM_SCHED_GetEmptySts);
-EXPORT_SYMBOL(hbo_queue_clear);
-EXPORT_SYMBOL(hbo_queue_enable);
-EXPORT_SYMBOL(hbo_queue_clear_done);
-EXPORT_SYMBOL(dhub2d_hdl);
+

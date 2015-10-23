@@ -2,26 +2,20 @@
  *
  *  @brief This file declares the generic data structures and APIs.
  *
- *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
+ *  Copyright (C) 2008-2014, Marvell International Ltd.
  *
- *  MARVELL CONFIDENTIAL
- *  The source code contained or described herein and all documents related to
- *  the source code ("Material") are owned by Marvell International Ltd or its
- *  suppliers or licensors. Title to the Material remains with Marvell
- *  International Ltd or its suppliers and licensors. The Material contains
- *  trade secrets and proprietary and confidential information of Marvell or its
- *  suppliers and licensors. The Material is protected by worldwide copyright
- *  and trade secret laws and treaty provisions. No part of the Material may be
- *  used, copied, reproduced, modified, published, uploaded, posted,
- *  transmitted, distributed, or disclosed in any way without Marvell's prior
- *  express written permission.
+ *  This software file (the "File") is distributed by Marvell International
+ *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
+ *  (the "License").  You may use, redistribute and/or modify this File in
+ *  accordance with the terms and conditions of the License, a copy of which
+ *  is available by writing to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
+ *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
  *
- *  No license under any patent, copyright, trade secret or other intellectual
- *  property right is granted to or conferred upon you by disclosure or delivery
- *  of the Materials, either expressly, by implication, inducement, estoppel or
- *  otherwise. Any license under such intellectual property rights must be
- *  express and approved by Marvell in writing.
- *
+ *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
+ *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
+ *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
+ *  this warranty disclaimer.
  */
 
 /******************************************************
@@ -33,7 +27,7 @@ Change log:
 #define _MLAN_DECL_H_
 
 /** MLAN release version */
-#define MLAN_RELEASE_VERSION		"481.P2"
+#define MLAN_RELEASE_VERSION		"481.P3"
 
 /** Re-define generic data types for MLAN/MOAL */
 /** Signed char (1-byte) */
@@ -239,12 +233,6 @@ typedef t_u8 mlan_802_11_mac_addr[MLAN_MAC_ADDR_LENGTH];
 #define MLAN_TX_RETRY_MIN		(0)
 /** Maximum tx retry count */
 #define MLAN_TX_RETRY_MAX		(14)
-
-
-#define RX_RATE_MAX			24
-#define SNR_MAX				256
-#define NOISE_FLR_MAX			256
-#define SIG_STRENGTH_MAX		256
 
 /** define SDIO block size for data Tx/Rx */
 /* We support up to 480-byte block size due to FW buffer limitation. */
@@ -1061,6 +1049,15 @@ typedef struct _mlan_callbacks {
     /** moal_tcp_ack_tx_ind */
 	 t_void(*moal_tcp_ack_tx_ind) (IN t_void * pmoal_handle,
 				       IN pmlan_buffer pmbuf);
+    /** moal_hist_data_add */
+t_void (*moal_hist_data_add) (
+    IN t_void *pmoal_handle,
+    IN t_u32 bss_index,
+    IN t_u8 rx_rate,
+    IN t_s8 snr,
+    IN t_s8 nflr,
+    IN t_u8 antenna
+    );
 } mlan_callbacks, *pmlan_callbacks;
 
 /** Interrupt Mode SDIO */
@@ -1177,14 +1174,6 @@ typedef int (*MOAL_PEER_MGMT_FRAME_CB) ( t_s8 snr,
                                       t_s8 nf,
 			              t_s8 sig_str,
 			              mlan_802_11_mac_addr mac);
-
-/** api to get the histogram data */
-MLAN_API int mlan_hist_data_get(
-    OUT char *pBuf,
-    OUT unsigned int *pNumSamples);
-
-/** api to clear existing histogram data */
-MLAN_API int mlan_hist_data_clear(void);
 
 /** memcpy implementation for mlan */
 MLAN_API void* mlan_memcpy(

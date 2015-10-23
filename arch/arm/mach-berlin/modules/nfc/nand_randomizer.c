@@ -1,3 +1,19 @@
+/********************************************************************************
+ * Marvell GPL License Option
+ *
+ * If you received this File from Marvell, you may opt to use, redistribute and/or
+ * modify this File in accordance with the terms and conditions of the General
+ * Public License Version 2, June 1991 (the "GPL License"), a copy of which is
+ * available along with the File in the license.txt file or by writing to the Free
+ * Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 or
+ * on the worldwide web at http://www.gnu.org/licenses/gpl.txt.
+ *
+ * THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE ARE EXPRESSLY
+ * DISCLAIMED.  The GPL License provides additional details about this warranty
+ * disclaimer.
+ ******************************************************************************/
+
 /** Randomize the data in NAND.
  *
  * At present, it only supports SAMSUNG NAND randomization way at present.
@@ -197,6 +213,27 @@ static const struct nand_randomized_chip_info_s g_nand_randomized_chip_list[] = 
 		MV_NAND_RANDOMIZER_SAMSUNG_PRBS15,
 		4096
 	}
+	/* HYNIX H27UCG8T2ATR, 64Gb */
+	,{
+		6,
+		{0xAD, 0xDE, 0x94, 0xDA, 0x74, 0xC4},
+		8192 * 256,
+		8192,
+		640,
+		MV_NAND_RANDOMIZER_SAMSUNG_PRBS15,
+		4096
+	}
+	/* HYNIX H27UAG8T2CTR, 16Gb */
+	,{
+		6,
+		{0xAD, 0xD5, 0x94, 0xDA, 0x74, 0xC4},
+		8192 * 256,
+		8192,
+		640,
+		MV_NAND_RANDOMIZER_SAMSUNG_PRBS15,
+		4096
+	}
+
 };
 
 /* Samsung randomizer.

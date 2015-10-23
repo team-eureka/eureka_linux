@@ -28,244 +28,27 @@
 #include <linux/dma-mapping.h>
 #include <linux/delay.h>
 #include <linux/mtd/mtd.h>
-#include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
-#include <linux/io.h>
 #include <linux/irq.h>
-#include <linux/slab.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_address.h>
+#include <linux/kdev_t.h>
 
 #include <asm/highmem.h>
 #include <asm/cacheflush.h>
-
 #include "pxa3xx_nand_debu.h"
-#include "pBridge.h"
-#include "api_dhub.h"
 
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+#include "pxa3xx_nand_read_retry_debu.h"
+#endif
 
-enum {
-	READ_DATA_CHANNEL_ID = PBSemaMap_dHubSemID_dHubCh0_intr,
-	WRITE_DATA_CHANNEL_ID = PBSemaMap_dHubSemID_dHubCh1_intr,
-	DESCRIPTOR_CHANNEL_ID = PBSemaMap_dHubSemID_dHubCh2_intr,
-	NFC_DEV_CTL_CHANNEL_ID = PBSemaMap_dHubSemID_dHubCh3_intr,
-	SPI_DEV_CTL_CHANNEL_ID = PBSemaMap_dHubSemID_dHubCh4_intr
-};
-#define READ_DATA_CHAN_CMD_BASE		(0)
-#define READ_DATA_CHAN_CMD_SIZE		(2 << 3)
-#define READ_DATA_CHAN_DATA_BASE	(READ_DATA_CHAN_CMD_BASE + READ_DATA_CHAN_CMD_SIZE)
-#define READ_DATA_CHAN_DATA_SIZE	(32 << 3)
-
-#define WRITE_DATA_CHAN_CMD_BASE	(READ_DATA_CHAN_DATA_BASE + READ_DATA_CHAN_DATA_SIZE)
-#define WRITE_DATA_CHAN_CMD_SIZE	(2 << 3)
-#define WRITE_DATA_CHAN_DATA_BASE	(WRITE_DATA_CHAN_CMD_BASE + WRITE_DATA_CHAN_CMD_SIZE)
-#define WRITE_DATA_CHAN_DATA_SIZE	(32 << 3)
-
-#define DESCRIPTOR_CHAN_CMD_BASE	(WRITE_DATA_CHAN_DATA_BASE + WRITE_DATA_CHAN_DATA_SIZE)
-#define DESCRIPTOR_CHAN_CMD_SIZE	(2 << 3)
-#define DESCRIPTOR_CHAN_DATA_BASE	(DESCRIPTOR_CHAN_CMD_BASE + DESCRIPTOR_CHAN_CMD_SIZE)
-#define DESCRIPTOR_CHAN_DATA_SIZE	(32 << 3)
-
-#define NFC_DEV_CTL_CHAN_CMD_BASE	(DESCRIPTOR_CHAN_DATA_BASE + DESCRIPTOR_CHAN_DATA_SIZE)
-#define NFC_DEV_CTL_CHAN_CMD_SIZE	(2 << 3)
-#define NFC_DEV_CTL_CHAN_DATA_BASE	(NFC_DEV_CTL_CHAN_CMD_BASE + NFC_DEV_CTL_CHAN_CMD_SIZE)
-#define NFC_DEV_CTL_CHAN_DATA_SIZE	(32 << 3)
-
-#define CHIP_DELAY_TIMEOUT	(2 * HZ/10)
-#define NAND_STOP_DELAY		(2 * HZ/50)
-#define PAGE_CHUNK_SIZE		(2048)
-#define OOB_CHUNK_SIZE		(64)
-#define CMD_POOL_SIZE		(5)
-#define BCH_THRESHOLD           (8)
-#define BCH_STRENGTH		(4)
-#define HAMMING_STRENGTH	(1)
-
-#define DMA_H_SIZE	(32*1024)
-
-/* registers and bit definitions */
-#define NDCR		(0x00) /* Control register */
-#define NDTR0CS0	(0x04) /* Timing Parameter 0 for CS0 */
-#define NDTR1CS0	(0x0C) /* Timing Parameter 1 for CS0 */
-#define NDSR		(0x14) /* Status Register */
-#define NDPCR		(0x18) /* Page Count Register */
-#define NDBDR0		(0x1C) /* Bad Block Register 0 */
-#define NDBDR1		(0x20) /* Bad Block Register 1 */
-#define NDECCCTRL	(0x28) /* ECC Control Register */
-#define NDDB		(0x40) /* Data Buffer */
-#define NDCB0		(0x48) /* Command Buffer0 */
-#define NDCB1		(0x4C) /* Command Buffer1 */
-#define NDCB2		(0x50) /* Command Buffer2 */
-
-#define NDCR_SPARE_EN		(0x1 << 31)
-#define NDCR_ECC_EN		(0x1 << 30)
-#define NDCR_DMA_EN		(0x1 << 29)
-#define NDCR_ND_RUN		(0x1 << 28)
-#define NDCR_DWIDTH_C		(0x1 << 27)
-#define NDCR_DWIDTH_M		(0x1 << 26)
-#define NDCR_PAGE_SZ		(0x1 << 24)
-#define NDCR_NCSX		(0x1 << 23)
-#define NDCR_FORCE_CSX          (0x1 << 21)
-#define NDCR_CLR_PG_CNT		(0x1 << 20)
-#define NDCR_STOP_ON_UNCOR	(0x1 << 19)
-#define NDCR_RD_ID_CNT_MASK	(0x7 << 16)
-#define NDCR_RD_ID_CNT(x)	(((x) << 16) & NDCR_RD_ID_CNT_MASK)
-
-#define NDCR_RA_START		(0x1 << 15)
-#define NDCR_PG_PER_BLK_MASK	(0x3 << 13)
-#define NDCR_PG_PER_BLK(x)	(((x) << 13) & NDCR_PG_PER_BLK_MASK)
-#define NDCR_ND_ARB_EN		(0x1 << 12)
-#define NDCR_INT_MASK           (0xFFF)
-#define NDCR_RDYM               (0x1 << 11)
-
-#define NDSR_MASK		(0xffffffff)
-#define NDSR_ERR_CNT_MASK       (0x1F << 16)
-#define NDSR_ERR_CNT(x)         (((x) << 16) & NDSR_ERR_CNT_MASK)
-#define NDSR_RDY                (0x1 << 12)
-#define NDSR_FLASH_RDY          (0x1 << 11)
-#define NDSR_CS0_PAGED		(0x1 << 10)
-#define NDSR_CS1_PAGED		(0x1 << 9)
-#define NDSR_CS0_CMDD		(0x1 << 8)
-#define NDSR_CS1_CMDD		(0x1 << 7)
-#define NDSR_CS0_BBD		(0x1 << 6)
-#define NDSR_CS1_BBD		(0x1 << 5)
-#define NDSR_DBERR		(0x1 << 4)
-#define NDSR_SBERR		(0x1 << 3)
-#define NDSR_WRDREQ		(0x1 << 2)
-#define NDSR_RDDREQ		(0x1 << 1)
-#define NDSR_WRCMDREQ		(0x1)
-
-#define NDCB0_CMD_XTYPE_MASK	(0x7 << 29)
-#define NDCB0_CMD_XTYPE(x)	(((x) << 29) & NDCB0_CMD_XTYPE_MASK)
-#define NDCB0_LEN_OVRD		(0x1 << 28)
-#define NDCB0_ST_ROW_EN         (0x1 << 26)
-#define NDCB0_AUTO_RS		(0x1 << 25)
-#define NDCB0_CSEL		(0x1 << 24)
-#define NDCB0_CMD_TYPE_MASK	(0x7 << 21)
-#define NDCB0_CMD_TYPE(x)	(((x) << 21) & NDCB0_CMD_TYPE_MASK)
-#define NDCB0_NC		(0x1 << 20)
-#define NDCB0_DBC		(0x1 << 19)
-#define NDCB0_ADDR_CYC_MASK	(0x7 << 16)
-#define NDCB0_ADDR_CYC(x)	(((x) << 16) & NDCB0_ADDR_CYC_MASK)
-#define NDCB0_CMD2_MASK		(0xff << 8)
-#define NDCB0_CMD1_MASK		(0xff)
-#define NDCB0_ADDR_CYC_SHIFT	(16)
-
-#define NDCB0_CMDX_MREAD	(0x0)
-#define NDCB0_CMDX_MWRITE	(0x0)
-#define NDCB0_CMDX_NWRITE_FINAL_CMD	(0x1)
-#define NDCB0_CMDX_FINAL_CMD	(0x3)
-#define NDCB0_CMDX_CMDP_WRITE	(0x4)
-#define NDCB0_CMDX_NREAD	(0x5)
-#define NDCB0_CMDX_NWRITE	(0x5)
-#define NDCB0_CMDX_CMDP		(0x6)
-
-#define NDCB0_CMD_READ		(0x0)
-#define NDCB0_CMD_PROGRAM	(0x1)
-#define NDCB0_CMD_ERASE		(0x2)
-#define NDCB0_CMD_READID	(0x3)
-#define NDCB0_CMD_STATUSREAD	(0x4)
-#define NDCB0_CMD_RESET		(0x5)
-#define NDCB0_CMD_NAKED_CMD	(0x6)
-#define NDCB0_CMD_NAKED_ADDR	(0x7)
-
-#define NDCB3_NDLENCNT_MASK	(0xffff)
-#define NDCB3_NDLENCNT(x)	((x) & NDCB3_NDLENCNT_MASK)
-
-/* ECC Control Register */
-#define NDECCCTRL_ECC_SPARE_MSK (0xFF << 7)
-#define NDECCCTRL_ECC_SPARE(x)  (((x) << 7) & NDECCCTRL_ECC_SPARE_MSK)
-#define NDECCCTRL_ECC_THR_MSK   (0x3F << 1)
-#define NDECCCTRL_ECC_THRESH(x) (((x) << 1) & NDECCCTRL_ECC_THR_MSK)
-#define NDECCCTRL_BCH_EN        (0x1)
-#define NDECCCTRL_ECC_STRENGTH_SHIFT (24)
-#define NDECCCTRL_ECC_STRENGTH_MSK	(0xFF << 24)
-#define NDECCCTRL_ECC_STRENGTH(x)	(((x) << 24) & NDECCCTRL_ECC_STRENGTH_MSK)
-
-/* macros for registers read/write */
-#define nand_writel(nand, off, val)	\
-	__raw_writel((val), (nand)->mmio_base + (off))
-
-#define nand_readl(nand, off)		\
-	__raw_readl((nand)->mmio_base + (off))
-#define get_mtd_by_info(info)		\
-	(struct mtd_info *)((void *)info - sizeof(struct mtd_info))
 
 /* macros for pbridge registers read/write */
 #define pb_writel(nand, off, val)	\
 	__raw_writel((val), nand->pb_base + (off))
 #define pb_readl(nand, off)		\
 	__raw_readl(nand->pb_base + (off))
-
-enum {
-	MV_MTU_8_BYTE = 0,
-	MV_MTU_32_BYTE,
-	MV_MTU_128_BYTE,
-	MV_MTU_1024_BYTE
-};
-
-#define pb_get_phys_offset(nand, off)	\
-	((nand->mmio_phys + off) & 0x0FFFFFFF)
-
-/* structure for DMA command buffer */
-struct cmd_3_desc {
-	SIE_BCMCFGW cfgw_ndcb0[3];
-};
-struct cmd_4_desc {
-	SIE_BCMCFGW cfgw_ndcb0[4];
-};
-
-struct start_desc {
-	SIE_BCMCFGW     ndcr_stop;
-	SIE_BCMCFGW     ndeccctrl;
-	SIE_BCMCFGW     ndsr_clear;
-	SIE_BCMCFGW     ndcr_go;
-};
-
-struct reset_desc {
-	SIE_BCMSEMA             sema_cmd;
-	struct cmd_3_desc       cmd;
-};
-
-struct read_status_desc {
-	SIE_BCMSEMA             sema_cmd;
-	struct cmd_3_desc       cmd;
-	SIE_BCMSEMA             sema_data;
-	SIE_BCMWCMD             wcmd;
-	SIE_BCMWDAT             wdat;
-};
-
-struct read_desc {
-	SIE_BCMSEMA             sema_cmd1;
-	struct cmd_3_desc       cmd1;
-	SIE_BCMSEMA             sema_addr;
-	struct cmd_3_desc       addr;
-	SIE_BCMSEMA             sema_cmd2;
-	struct cmd_3_desc       cmd2;
-	/* chunks * (sema + cmd4 + units * (sema + data)) */
-	unsigned char data_cmd[0];
-};
-
-struct dp_read_desc {
-	SIE_BCMSEMA		sema_cmd1;
-	struct cmd_3_desc	plane_1_cmd;
-	SIE_BCMSEMA		sema_addr1;
-	struct cmd_3_desc	plane_1_addr;
-	SIE_BCMSEMA		sema_cmd2;
-	struct cmd_3_desc	plane_2_cmd;
-	SIE_BCMSEMA		sema_addr2;
-	struct cmd_3_desc	plane_2_addr;
-	SIE_BCMSEMA		sema_conf_cmd;
-	struct cmd_3_desc	confirm_cmd;
-	/* planes *   ( sema + cmd3 +
-	 * 		sema + cmd3 +
-	 * 		sema + cmd3 +
-	 * 		sema + cmd3 +
-	 * 		sema + cmd3 +
-	 * 		chunk *	( sema + cmd4 +
-	 * 			units * (sema + wcmd + wdat)))*/
-	unsigned char		data_cmd[0];
-};
 
 struct dp_erase_desc {
 	SIE_BCMSEMA		sema_cmd1;
@@ -294,146 +77,6 @@ struct write_2_desc {
 	struct cmd_3_desc       cmd2;
 };
 
-/* error code and state */
-enum {
-	ERR_NONE	= 0,
-	ERR_DMABUSERR	= -1,
-	ERR_SENDCMD	= -2,
-	ERR_DBERR	= -3,
-	ERR_BBERR	= -4,
-	ERR_SBERR	= -5,
-	ERR_DMAMAPERR	= -6,
-};
-
-enum {
-	STATE_IDLE = 0,
-	STATE_PREPARED,
-	STATE_CMD_HANDLE,
-	STATE_DMA_READING,
-	STATE_DMA_WRITING,
-	STATE_DMA_DONE,
-	STATE_PIO_READING,
-	STATE_PIO_WRITING,
-	STATE_CMD_DONE,
-	STATE_READY,
-};
-
-enum {
-	TYPE_SINGLE_PLANE = 0,
-	TYPE_DUAL_PLANE,
-	TYPE_UNKNOWN,
-};
-
-struct pxa3xx_nand_info {
-	struct nand_chip	nand_chip;
-
-	struct pxa3xx_nand_cmdset *cmdset;
-	/* page size of attached chip */
-	uint16_t		page_size;
-	uint8_t			chip_select;
-	uint8_t			ecc_strength;
-
-	int			page_shift;
-	int			erase_shift;
-
-	uint8_t			has_dual_plane;
-	uint8_t			n_planes;
-	uint32_t		erase_size;
-
-	/* calculated from pxa3xx_nand_flash data */
-	uint8_t			col_addr_cycles;
-	uint8_t			row_addr_cycles;
-	uint8_t			read_id_bytes;
-
-	/* cached register value */
-	uint32_t		reg_ndcr;
-	uint32_t		ndtr0cs0;
-	uint32_t		ndtr1cs0;
-
-	void			*nand_data;
-};
-
-struct pxa3xx_nand {
-	void __iomem		*mmio_base;
-	void __iomem		*pb_base;
-	unsigned long		mmio_phys;
-	struct nand_hw_control	controller;
-	struct completion 	cmd_complete;
-	struct platform_device	 *pdev;
-
-	/* DMA information */
-	HDL_dhub		PB_dhubHandle;
-	unsigned int		mtu_size;
-	unsigned int		mtu_type;
-	dma_addr_t 		data_buff_phys;
-	dma_addr_t		oob_buff_phys;
-
-	unsigned char		*bounce_buffer;
-
-	dma_addr_t 		data_desc_addr;
-	unsigned char		*data_desc;
-	int			data_desc_len;
-
-	dma_addr_t 		read_desc_addr;
-	unsigned char		*read_desc;
-	int			read_desc_len[NUM_CHIP_SELECT];
-
-	dma_addr_t 		write_desc_addr;
-	unsigned char		*write_desc;
-	int			write_desc_len[NUM_CHIP_SELECT];
-
-	dma_addr_t		dp_read_desc_addr;
-	unsigned char		*dp_read_desc;
-	int			dp_read_desc_len[NUM_CHIP_SELECT];
-
-	dma_addr_t 		dp_write_desc_addr;
-	unsigned char		*dp_write_desc;
-	int			dp_write_desc_len[NUM_CHIP_SELECT];
-
-	int			transfer_units[NUM_CHIP_SELECT];
-	int			transfer_units_last_trunk[NUM_CHIP_SELECT];
-
-	struct pxa3xx_nand_info *info[NUM_CHIP_SELECT];
-	struct pxa3xx_nand_info *info_dp[NUM_CHIP_SELECT];
-	uint8_t			chip_select;
-	uint32_t		command;
-	uint16_t		data_size;	/* data size in FIFO */
-	uint16_t		oob_size;
-	unsigned char		*data_buff;
-	unsigned char		*oob_buff;
-
-	/************
-	 * following members will be reset as 0 before real IO
-	 ************/
-	uint32_t		buf_start;
-	uint32_t		buf_count;
-	uint16_t		data_column;
-	uint16_t		oob_column;
-
-	/* relate to the command */
-	unsigned int		state;
-	int			page_addr;
-	uint16_t		column;
-	unsigned int		ecc_strength;
-	unsigned int		bad_count;
-	int			use_mapped_buf;
-	int			is_ready;
-	int 			retcode;
-
-	uint32_t		ndeccctrl;
-	uint32_t		ndcr;
-
-	/* generated NDCBx register values */
-	uint8_t			total_cmds;
-	uint8_t			cmd_seqs;
-	uint8_t			wait_ready[CMD_POOL_SIZE];
-	uint32_t		ndcb0[CMD_POOL_SIZE];
-	uint32_t		ndcb1;
-	uint32_t		ndcb2;
-	uint32_t		chunk_oob_size[CMD_POOL_SIZE];
-	uint32_t		curr_chunk;
-};
-
 static char *plane_cmdline;
 module_param(plane_cmdline,  charp, 0000);
 MODULE_PARM_DESC(plane_cmdline, "command line for plane numbers of different partitions");
@@ -442,7 +85,12 @@ static bool use_dma = 1;
 module_param(use_dma, bool, 0444);
 MODULE_PARM_DESC(use_dma, "enable DMA for data transferring to/from NAND HW");
 
+#ifdef CONFIG_BERLIN_ASIC
 static char *usr_ndtr0 = "84840A12";
+#else
+static char *usr_ndtr0 = "84840A92";
+#endif
+
 module_param(usr_ndtr0,  charp, 0000);
 MODULE_PARM_DESC(usr_ndtr0, "NDTR0CS0");
 
@@ -494,6 +142,11 @@ static struct pxa3xx_nand_flash builtin_flash_types[] = {
 { "DEFAULT FLASH",      0,      0,   0, 2048,  8,  8, 0,    0, &timing[0], 0 },
 { "64MiB 16-bit",  0x46ec, 0xffff,  32,  512, 16, 16, 1, 4096, &timing[1], 0 },
 { "256MiB 8-bit",  0xdaec, 0xffff,  64, 2048,  8,  8, 1, 2048, &timing[1], 0 },
+{ "Power Chip 256MiB 8-bit",  0xdac8, 0x9590, 64, 2048,  8,  8, 16, 2048, &timing[6], 0 },
+{ "Power Chip 512MiB 8-bit",  0xdcc8, 0x9590, 64, 2048,  8,  8, 16, 4096, &timing[6], 0 },
+{ "Toshiba 256MiB 8-bit",  0xda98, 0x1590, 64, 2048,  8,  8, 48, 2048, &timing[6], 0 },
+{ "Toshiba 512MiB 8-bit",  0xdc98, 0x1591, 64, 2048,  8,  8, 32, 4096, &timing[6], 0 },
+{ "Hynix 256MiB 8-bit",  0xdaad, 0x9590, 64, 2048,  8,  8, 32, 2048, &timing[6], 0 },
 { "4GiB 8-bit",    0xd7ec, 0xb655, 128, 4096,  8,  8, 4, 8192, &timing[1], 0 },
 { "4GiB 8-bit",    0xd7ec, 0x29d5, 128, 4096,  8,  8, 8, 8192, &timing[1], 0 },
 { "128MiB 8-bit",  0xa12c, 0xffff,  64, 2048,  8,  8, 1, 1024, &timing[2], 0 },
@@ -505,6 +158,7 @@ static struct pxa3xx_nand_flash builtin_flash_types[] = {
 { "2GiB 8-bit",    0xd5ec, 0x7284, 128, 8192,  8,  8, 48, 2048, &timing[4], 0 },
 { "2GiB 8-bit",    0xd598, 0x3284, 128, 8192,  8,  8, 80, 2048, &timing[5], 1 },
 { "2GiB 8-bit",    0x482c, 0x4a04, 256, 4096,  8,  8, 48, 2048, &timing[6], 1 },
+{ "2GiB 8-bit",    0xd5ad, 0xda94, 256, 8192,  8,  8, 80, 1024, &timing[6], 1 },
 { "4GiB 8-bit",    0xd7ec, 0x7A94, 128, 8192,  8,  8, 48, 4096, &timing[5], 1 },
 { "4GiB 8-bit",    0xd7ec, 0x7e94, 128, 8192,  8,  8, 80, 4096, &timing[5], 1 },
 { "8GiB 8-bit",    0xdeec, 0x7ad5, 128, 8192,  8,  8, 48, 4096, &timing[5], 1 },
@@ -512,6 +166,26 @@ static struct pxa3xx_nand_flash builtin_flash_types[] = {
 { "4GiB 8-bit",    0x682c, 0x4a04, 256, 4096,  8,  8, 48, 4096, &timing[6], 1 },
 { "4GiB 8-bit",    0x682c, 0x4604, 256, 4096,  8,  8, 48, 4096, &timing[6], 1 },
 { "8GiB 8-bit",    0x882c, 0x4b04, 256, 8192,  8,  8, 48, 4096, &timing[6], 1 },
+{ "8GiB 8-bit",    0xdead, 0xda94, 256, 8192,  8,  8, 80, 4096, &timing[6], 1 },
+};
+
+static const unsigned char g_byte_zero_bits[256] = {
+	8, 7, 7, 6, 7, 6, 6, 5, 7, 6, 6, 5, 6, 5, 5, 4,
+	7, 6, 6, 5, 6, 5, 5, 4, 6, 5, 5, 4, 5, 4, 4, 3,
+	7, 6, 6, 5, 6, 5, 5, 4, 6, 5, 5, 4, 5, 4, 4, 3,
+	6, 5, 5, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 3, 3, 2,
+	7, 6, 6, 5, 6, 5, 5, 4, 6, 5, 5, 4, 5, 4, 4, 3,
+	6, 5, 5, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 3, 3, 2,
+	6, 5, 5, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 3, 3, 2,
+	5, 4, 4, 3, 4, 3, 3, 2, 4, 3, 3, 2, 3, 2, 2, 1,
+	7, 6, 6, 5, 6, 5, 5, 4, 6, 5, 5, 4, 5, 4, 4, 3,
+	6, 5, 5, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 3, 3, 2,
+	6, 5, 5, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 3, 3, 2,
+	5, 4, 4, 3, 4, 3, 3, 2, 4, 3, 3, 2, 3, 2, 2, 1,
+	6, 5, 5, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 3, 3, 2,
+	5, 4, 4, 3, 4, 3, 3, 2, 4, 3, 3, 2, 3, 2, 2, 1,
+	5, 4, 4, 3, 4, 3, 3, 2, 4, 3, 3, 2, 3, 2, 2, 1,
+	4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0
 };
 
 /* Define a default flash type setting serve as flash detecting only */
@@ -530,6 +204,96 @@ const char *mtd_names[] = {"mv_nand", "mv_nand", NULL};
 #define NDTR1_tWHR(c)	(min((c), 15) << 4)
 #define NDTR1_tAR(c)	(min((c), 15) << 0)
 
+static struct class *nand_class;
+static int nand_create_device(struct pxa3xx_nand *nand);
+int parse_mtd_partitions(struct mtd_info *master, const char **types,
+			 struct mtd_partition **pparts,
+			 struct mtd_part_parser_data *data);
+
+
+
+#define PXA3XX_NAND_DMA_DEBUG 1
+#if (PXA3XX_NAND_DMA_DEBUG == 1)
+#define TEST_NUM	100
+static void pxa3xx_nand_dump_registers(struct pxa3xx_nand_info *info);
+static void pxa3xx_nand_start(struct pxa3xx_nand_info *info);
+void pb_init(struct pxa3xx_nand *nand);
+
+static struct pxa3xx_dma_debug_info {
+	unsigned int cmd;
+	int page_addr;
+	int planes;
+	unsigned int buff;
+	unsigned int mode;
+	unsigned int step;
+	ktime_t       exec_time;
+	ktime_t       finish_time;
+} nand_debug_info[TEST_NUM];
+static int current_num = 0;
+
+#define loop_watcher(loop, limit)  					\
+{									\
+	loop++; 							\
+	if ( loop > limit ) {						\
+		printk("%s time out, retrying !!!!!!\n", __FUNCTION__);	\
+		debug_info_print(nand);					\
+		return -1;						\
+	}								\
+}
+
+static void debug_push_info(struct mtd_info *mtd, unsigned command,
+		int page_addr)
+{
+	struct pxa3xx_nand_info *info = mtd->priv;
+	struct pxa3xx_nand *nand = info->nand_data;
+	unsigned int num;
+
+	current_num++;
+	if (current_num == TEST_NUM) {
+		current_num = 0;
+	}
+
+	num = current_num;
+	memset(&nand_debug_info[num], 0, sizeof(nand_debug_info[num]));
+	nand_debug_info[num].cmd = command;
+	nand_debug_info[num].page_addr = page_addr;
+	nand_debug_info[num].planes = info->n_planes;
+	nand_debug_info[num].mode = info->eslc_mode;
+	nand_debug_info[num].exec_time =  ktime_get();
+	if (command == NAND_CMD_RNDOUT) {
+		nand_debug_info[num].buff = (int)nand->data_buff;
+	} else if (command == NAND_CMD_PAGEPROG) {
+		nand_debug_info[num].buff = (int)nand->data_buff_phys;
+	} else {
+		nand_debug_info[num].buff = (int)NULL;
+	}
+
+}
+
+static void debug_info_print(struct pxa3xx_nand *nand)
+{
+	int i, num = current_num;
+	int time_ent, time_ext;
+
+	pxa3xx_nand_dump_registers(nand->info[nand->chip_select]);
+	for (i = 0; i < TEST_NUM; i++) {
+		time_ent = (unsigned long) ktime_to_ns(nand_debug_info[num].exec_time) >> 10;
+		time_ext = (unsigned long) ktime_to_ns(nand_debug_info[num].finish_time) >> 10;
+		printk("Num[%02d] CMD[%04x] page_addr[%08x] planes[%d] mode [%d] buff[%08x] "
+			"ent[%08x] ext[%08x]\n",
+			num, nand_debug_info[num].cmd, nand_debug_info[num].page_addr,
+			nand_debug_info[num].planes, nand_debug_info[num].mode, nand_debug_info[num].buff,
+			time_ent, time_ext);
+
+		if (num == 0)
+			num = TEST_NUM -1;
+		else
+			num--;
+	}
+}
+
+#endif	//(PXA3XX_NAND_DMA_DEBUG == 1)
+
 #ifdef CONFIG_BERLIN_NAND_RANDOMIZER
 
 #include "nand_randomizer.h"
@@ -537,9 +301,6 @@ const char *mtd_names[] = {"mv_nand", "mv_nand", NULL};
 #define NAND_ID_SIZE			(4)	/* 4 is a hack. we need to fix it.
 						 * most of the chip should be 6
 						 */
-int parse_mtd_partitions(struct mtd_info *master, const char **types,
-			 struct mtd_partition **pparts,
-			 struct mtd_part_parser_data *data);
 
 static void nand_read_chip_id(struct mtd_info *mtd, unsigned char *id_data, int id_len)
 {
@@ -565,7 +326,7 @@ static void nand_randomizer_init_by_chip(struct mtd_info *mtd, int chip)
 	unsigned char id_data[NAND_ID_SIZE];
 	int randomized;
 
-	if ((chip < 0) || (mtd == pre_mtd && chip == pre_chip))
+	if ((chip < 0) || (/*mtd == pre_mtd &&*/ chip == pre_chip))
 		return;
 
 	pre_mtd = mtd;
@@ -683,6 +444,11 @@ static void pxa3xx_nand_dump_registers(struct pxa3xx_nand_info *info)
 	printk(KERN_INFO "NDCR        = %08X\n", nand_readl(nand, NDCR));
 	printk(KERN_INFO "NDECCCTRL   = %08X\n", nand_readl(nand, NDECCCTRL));
 	printk(KERN_INFO "NDSR        = %08X\n", nand_readl(nand, NDSR));
+	printk(KERN_INFO "NDCB        = %08x %08x %08x %08x\n",
+			nand_readl(nand, NDCB0),
+			nand_readl(nand, NDCB1),
+			nand_readl(nand, NDCB2),
+			nand_readl(nand, NDCB3));
 	printk(KERN_INFO "================================\n");
 }
 
@@ -861,8 +627,16 @@ static irqreturn_t mv88dexx_nand_dma_intr(int irq, void *devid)
 	status = nand_readl(nand, NDSR);
 	if (status & NDSR_DBERR)
 		nand->retcode = ERR_DBERR;
-	if (status & NDSR_SBERR)
+	if (status & NDSR_SBERR) {
 		nand->retcode = ERR_SBERR;
+		nand->bad_count = (status>>16)&0xff;
+	}
+	if (status & NDSR_CS0_BBD) {
+		nand->retcode = ERR_BBERR;
+		printk(KERN_INFO "BBERR: status %x, page %x, cmd %x\n",
+			status, nand->page_addr, nand->command);
+	}
+
 	nand_writel(nand, NDSR, status);
 
 	complete(&nand->cmd_complete);
@@ -870,67 +644,67 @@ static irqreturn_t mv88dexx_nand_dma_intr(int irq, void *devid)
 	return IRQ_HANDLED;
 }
 
-static inline int is_buf_blank(uint8_t *buf, size_t len)
+static int is_trunk_blank(int ecc, uint8_t *data_buf, uint8_t *oob_buf,
+		size_t data_len, size_t oob_len)
 {
-	for (; len > 0; len--)
-		if (*buf++ != 0xff)
-			return 0;
+	int i, zero_bits_num = 0;
 
-	return 1;
-}
-
-static int is_read_datbuf_blank(int ecc, int pagesize,
-					uint8_t *buf, size_t len)
-{
-	int i = 0;
-
-	for (; len > 0; len--, i++, buf++) {
-		if (*buf != 0xff) {
-			switch (ecc) {
-			case 48:
-				/* Bellow position will not be 0xff:
-				 *
-				 * Last Chunk: 0x7CD
-				 * Not Last Chunk: 0x7C8
-				 *
-				 * Should cover 2kB-8kB, and 16kB for dual-plane.
-				 * For dual-plane, data layout is as bellow:
-				 * [chunk00]...[chunk03][oob0][chunk10]...[chunk13][oob1]
-				 * |         page 0          ||       page 1            |
-				 *
-				 * page0's [oob0] is same as page1's [oob1].
-				 *
-				 * So, for 8kB page, 0x1FC8 won't be covered.
-				 */
-				if (i == 0x7C8 || i == 0xFC8 || i == 0x17C8
-						|| i == 0x1FC8 || i == 0x27C8
-						|| i == 0x2FC8 || i == 0x37C8
-						|| i == 0x7CD || i == 0xFCD
-						|| i == 0x1FCD || i == 0x3FCD) {
-					*buf = 0xff;
-					continue;
-				}
-				break;
-			case 80:
-				/* Bellow position will not be 0xff:
-				 *
-				 * Last Chunk: 0x744;
-				 * Not Last Chunk: none;
-				 *
-				 * Should cover 2kB-8kB, and 16kB for dual-plane
-				 */
-				if (i == 0x744 || i == 0xF44
-						|| i == 0x1F44 || i == 0x3F44) {
-					*buf = 0xff;
-					continue;
-				}
-				break;
-			}
-			printk(KERN_DEBUG "[%s] offset %08x: %02X\n", __func__, i, *buf);
+	for (i = 0, zero_bits_num = 0; i < data_len; i++) {
+		zero_bits_num += g_byte_zero_bits[data_buf[i]];
+		if (zero_bits_num >= ecc) {
+			printk(KERN_DEBUG "[%s], data %d %d\n", __func__,
+				zero_bits_num, i);
 			return 0;
 		}
 	}
 
+	if (oob_buf) {
+		for (i = 0; i < oob_len; i++) {
+			zero_bits_num += g_byte_zero_bits[oob_buf[i]];
+			if (zero_bits_num >= ecc) {
+				printk(KERN_DEBUG "[%s], oob %d %d\n", __func__,
+					zero_bits_num, i);
+				return 0;
+			}
+		}
+	}
+
+	return 1;
+}
+
+static inline int is_read_page_blank(int ecc, uint8_t *data_buf,
+		uint8_t *oob_buf, size_t data_len, size_t oob_len, int plane_num)
+{
+	int plane, i, chunks, len;
+
+	if (plane_num == 2) {
+		data_len >>= 1;
+		oob_len >>= 1;
+	} else {
+		plane_num = 1;
+	}
+	chunks = data_len / PAGE_CHUNK_SIZE;
+
+	for (plane = 0; plane < plane_num; plane++) {
+		for (i = 0, len = data_len; i < chunks-1; i++) {
+			if (!is_trunk_blank(ecc, data_buf, NULL,
+				PAGE_CHUNK_SIZE, 0)) {
+				printk(KERN_INFO "[%s], planes [%d of %d], chunk %d\n",
+					__func__, plane, plane_num, i);
+				return 0;
+			}
+			data_buf += PAGE_CHUNK_SIZE;
+			len -= PAGE_CHUNK_SIZE;
+		}
+
+		if (!is_trunk_blank(ecc, data_buf, oob_buf + plane*oob_len,
+			len, oob_len)) {
+			printk(KERN_INFO "[%s], planes [%d of %d], chunk %d\n",
+				__func__, plane, plane_num, chunks-1);
+			return 0;
+		}
+		data_buf += len;
+	}
 	return 1;
 }
 
@@ -1001,6 +775,7 @@ static int prepare_command_pool(struct pxa3xx_nand_info *info, int command,
 		break;
 
 	case NAND_CMD_RNDOUT:
+		nand->page_addr = page_addr;
 		cmd = info->cmdset->read1;
 		if (command == NAND_CMD_READOOB)
 			nand->buf_start = mtd->writesize + column;
@@ -1055,7 +830,6 @@ static int prepare_command_pool(struct pxa3xx_nand_info *info, int command,
 		if (unlikely(info->page_size < PAGE_CHUNK_SIZE)
 		    || !(pdata->controller_attrs & PXA3XX_NAKED_CMD_EN)) {
 			nand->ndcb0[0] |= NDCB0_CMD_TYPE(0x1)
-					| NDCB0_AUTO_RS
 					| NDCB0_ST_ROW_EN
 					| NDCB0_DBC
 					| cmd
@@ -1067,14 +841,12 @@ static int prepare_command_pool(struct pxa3xx_nand_info *info, int command,
 		nand->ndcb0[0] |= NDCB0_CMD_XTYPE(0x4)
 				| NDCB0_CMD_TYPE(0x1)
 				| NDCB0_NC
-				| NDCB0_AUTO_RS
 				| (cmd & NDCB0_CMD1_MASK)
 				| addr_cycle;
 
 		for (i = 1; i < chunks; i ++)
 			nand->ndcb0[i] |= NDCB0_CMD_XTYPE(0x5)
 					| NDCB0_NC
-					| NDCB0_AUTO_RS
 					| (cmd & NDCB0_CMD1_MASK)
 					| NDCB0_CMD_TYPE(0x1);
 
@@ -1335,7 +1107,7 @@ static void pxa3xx_nand_run_state_machine(struct pxa3xx_nand_info *info)
  * dma related functions
  *******************************/
 
-static inline void init_cmd_3(struct pxa3xx_nand *nand, struct cmd_3_desc *cmd)
+void init_cmd_3(struct pxa3xx_nand *nand, struct cmd_3_desc *cmd)
 {
 	SIE_BCMCFGW *cfgw = (SIE_BCMCFGW *)cmd;
 
@@ -1351,7 +1123,7 @@ static inline void init_cmd_3(struct pxa3xx_nand *nand, struct cmd_3_desc *cmd)
 	cfgw->u_devAdr = pb_get_phys_offset(nand, NDCB0);
 	cfgw->u_hdr = BCMINSFMT_hdr_CFGW;
 }
-static inline void init_cmd_4(struct pxa3xx_nand *nand, struct cmd_4_desc *cmd)
+void init_cmd_4(struct pxa3xx_nand *nand, struct cmd_4_desc *cmd)
 {
 	SIE_BCMCFGW *cfgw = (SIE_BCMCFGW *)cmd;
 
@@ -1371,7 +1143,7 @@ static inline void init_cmd_4(struct pxa3xx_nand *nand, struct cmd_4_desc *cmd)
 	cfgw->u_devAdr = pb_get_phys_offset(nand, NDCB0);
 	cfgw->u_hdr = BCMINSFMT_hdr_CFGW;
 }
-static inline void init_wcmd(struct pxa3xx_nand *nand, SIE_BCMWCMD *wcmd)
+void init_wcmd(struct pxa3xx_nand *nand, SIE_BCMWCMD *wcmd)
 {
 	wcmd->u_ddrAdr = 0;
 	wcmd->u_size = 8;
@@ -1379,7 +1151,7 @@ static inline void init_wcmd(struct pxa3xx_nand *nand, SIE_BCMWCMD *wcmd)
 	wcmd->u_updSemId = 0;
 	wcmd->u_hdr = BCMINSFMT_hdr_WCMD;
 }
-static inline void init_wdat(struct pxa3xx_nand *nand, SIE_BCMWDAT *wdat)
+void init_wdat(struct pxa3xx_nand *nand, SIE_BCMWDAT *wdat)
 {
 	wdat->u_size = 8;
 	wdat->u_mode = 2;
@@ -1389,7 +1161,7 @@ static inline void init_wdat(struct pxa3xx_nand *nand, SIE_BCMWDAT *wdat)
 	wdat->u_devAdr = pb_get_phys_offset(nand, NDDB);
 	wdat->u_hdr = BCMINSFMT_hdr_WDAT;
 }
-static inline void init_rcmd(struct pxa3xx_nand *nand, SIE_BCMRCMD *rcmd)
+void init_rcmd(struct pxa3xx_nand *nand, SIE_BCMRCMD *rcmd)
 {
 	rcmd->u_ddrAdr = 0;
 	rcmd->u_size = 0;
@@ -1398,7 +1170,7 @@ static inline void init_rcmd(struct pxa3xx_nand *nand, SIE_BCMRCMD *rcmd)
 	rcmd->u_rsvd = 0;
 	rcmd->u_hdr = BCMINSFMT_hdr_RCMD;
 }
-static inline void init_rdat(struct pxa3xx_nand *nand, SIE_BCMRDAT *rdat)
+void init_rdat(struct pxa3xx_nand *nand, SIE_BCMRDAT *rdat)
 {
 	rdat->u_size = 0;
 	rdat->u_mode = 2;
@@ -1410,7 +1182,7 @@ static inline void init_rdat(struct pxa3xx_nand *nand, SIE_BCMRDAT *rdat)
 	rdat->u_devAdr = pb_get_phys_offset(nand, NDDB);
 	rdat->u_hdr = BCMINSFMT_hdr_RDAT;
 }
-static inline void init_sema_nfccmd(struct pxa3xx_nand *nand,
+void init_sema_nfccmd(struct pxa3xx_nand *nand,
 		SIE_BCMSEMA *sema)
 {
 	sema->u_pUpdId = 0;
@@ -1419,7 +1191,7 @@ static inline void init_sema_nfccmd(struct pxa3xx_nand *nand,
 	sema->u_cChkId = PBSemaMap_dHubSemID_dHub_NFCCmd;
 	sema->u_hdr = BCMINSFMT_hdr_SEMA;
 }
-static inline void init_sema_nfcdat(struct pxa3xx_nand *nand,
+void init_sema_nfcdat(struct pxa3xx_nand *nand,
 		SIE_BCMSEMA *sema)
 {
 	sema->u_pUpdId = 0;
@@ -1429,14 +1201,25 @@ static inline void init_sema_nfcdat(struct pxa3xx_nand *nand,
 	sema->u_hdr = BCMINSFMT_hdr_SEMA;
 }
 
-static inline void wait_dhub_ready(struct pxa3xx_nand *nand)
+void wait_dhub_ready(struct pxa3xx_nand *nand)
 {
 	uint32_t read;
-
+	int timeout = 300000;
 	/* check if NFC_DEV_CTL_CHANNEL_ID bit FULL */
 	do {
 		read = pb_readl(nand, RA_pBridge_dHub + RA_dHubReg2D_dHub +
 				RA_dHubReg_SemaHub+ RA_SemaHub_full);
+		timeout--;
+		if(!timeout) {
+			pxa3xx_nand_dump_registers(nand->info[nand->chip_select]);
+			printk("wait_dhub_ready time out %x\n", read);
+
+			dump_stack();
+#if (PXA3XX_NAND_DMA_DEBUG == 1)
+			debug_info_print(nand);
+#endif
+			timeout = 0xffffffff;
+		}
 	} while (!(read & (1 << NFC_DEV_CTL_CHANNEL_ID)));
 
 	/* pop NFC_DEV_CTL_CHANNEL_ID semaphore */
@@ -1465,7 +1248,6 @@ static void mv88dexx_nand_dma_reset(struct pxa3xx_nand_info *info)
 		NDCB0_CMD_TYPE(NDCB0_CMD_RESET) |
 		(info->cmdset->reset & NDCB0_CMD1_MASK);
 	i += sizeof(struct cmd_3_desc);
-
 	wmb();
 	dhub_channel_write_cmd(
 			&nand->PB_dhubHandle,	/*  Handle to HDL_dhub */
@@ -1666,7 +1448,7 @@ static void mv88dexx_nand_dma_readid(struct pxa3xx_nand_info *info)
 	wait_dhub_ready(nand);
 }
 
-static void mv88dexx_nand_dma_start(struct pxa3xx_nand_info *info, int rw)
+void mv88dexx_nand_dma_start(struct pxa3xx_nand_info *info, int rw)
 {
 	unsigned int i = 0;
 	SIE_BCMCFGW *cfgw;
@@ -2067,7 +1849,6 @@ static void mv88dexx_nand_dma_init_write_desc(struct pxa3xx_nand_info *info)
 	cfgw = (SIE_BCMCFGW *)&(desc2->cmd2);
 	cfgw->u_dat = NDCB0_CMD_XTYPE(NDCB0_CMDX_FINAL_CMD) |
 		ndcb0_cs |
-		NDCB0_AUTO_RS |
 		NDCB0_NC |
 		NDCB0_DBC |
 		NDCB0_CMD_TYPE(NDCB0_CMD_PROGRAM) |
@@ -2309,7 +2090,6 @@ static void mv88dexx_nand_dma_dp_erase(struct pxa3xx_nand_info *info)
 	cfgw->u_dat = ndcb0_cs
 		| NDCB0_CMD_TYPE(NDCB0_CMD_ERASE)
 		| addr_cycle
-		| NDCB0_AUTO_RS
 		| NDCB0_NC
 		| ((cmd & 0xff0000) >> 16);
 	i += sizeof(struct cmd_3_desc);
@@ -2450,7 +2230,6 @@ static void mv88dexx_nand_dma_init_dp_write_desc(struct pxa3xx_nand_info *info)
 		init_cmd_4(nand, cmd_4);
 		cmd_4->cfgw_ndcb0[0].u_dat = NDCB0_LEN_OVRD |
 			NDCB0_CMD_XTYPE(NDCB0_CMDX_NWRITE) |
-			NDCB0_AUTO_RS |
 			ndcb0_cs |
 			NDCB0_CMD_TYPE(NDCB0_CMD_PROGRAM) |
 			NDCB0_NC |
@@ -2489,7 +2268,6 @@ static void mv88dexx_nand_dma_init_dp_write_desc(struct pxa3xx_nand_info *info)
 	init_cmd_3(nand, cmd_3);
 	cmd_3->cfgw_ndcb0[0].u_dat = ndcb0_cs |
 		NDCB0_CMD_XTYPE(NDCB0_CMDX_FINAL_CMD) |
-		NDCB0_AUTO_RS |
 		NDCB0_CMD_TYPE(NDCB0_CMD_PROGRAM) |
 		NDCB0_NC |
 		NDCB0_DBC |
@@ -2541,7 +2319,6 @@ static void mv88dexx_nand_dma_init_dp_write_desc(struct pxa3xx_nand_info *info)
 		init_cmd_4(nand, cmd_4);
 		cmd_4->cfgw_ndcb0[0].u_dat = NDCB0_LEN_OVRD |
 			NDCB0_CMD_XTYPE(NDCB0_CMDX_NWRITE) |
-			NDCB0_AUTO_RS |
 			ndcb0_cs |
 			NDCB0_CMD_TYPE(NDCB0_CMD_PROGRAM) |
 			NDCB0_NC |
@@ -2580,7 +2357,6 @@ static void mv88dexx_nand_dma_init_dp_write_desc(struct pxa3xx_nand_info *info)
 	init_cmd_3(nand, cmd_3);
 	cmd_3->cfgw_ndcb0[0].u_dat = ndcb0_cs |
 		NDCB0_CMD_XTYPE(NDCB0_CMDX_FINAL_CMD) |
-		NDCB0_AUTO_RS |
 		NDCB0_NC |
 		NDCB0_DBC |
 		NDCB0_CMD_TYPE(NDCB0_CMD_PROGRAM) |
@@ -2802,6 +2578,7 @@ static void pxa3xx_nand_dma_cmdfunc(struct pxa3xx_nand_info *info,
 			mv88dexx_nand_dma_dp_erase(info);
 		else
 			mv88dexx_nand_dma_erase(info);
+		nand->nand_sts.block_erased++;
 		break;
 	case NAND_CMD_RNDOUT:
 		if (info->n_planes == 2) {
@@ -2897,10 +2674,9 @@ static void pxa3xx_nand_dma_cmdfunc(struct pxa3xx_nand_info *info,
 		}
 	}
 	if (!ret) {
-		printk(KERN_ERR "%s pid %d cmd 0x%02x stop NFC\n",
-				__func__, current->pid, nand->command);
-		/* Stop State Machine for next command cycle */
-		pxa3xx_nand_stop(nand);
+		printk(KERN_ERR "BLOCK NAND DRVIER, page [%x]\n", nand->page_addr);
+		pxa3xx_nand_dump_registers(info);
+		wait_for_completion(&nand->cmd_complete);
 	}
 
 finish:
@@ -2913,6 +2689,10 @@ static void pxa3xx_nand_cmdfunc(struct mtd_info *mtd, unsigned command,
 	struct pxa3xx_nand_info *info = mtd->priv;
 	struct pxa3xx_nand *nand = info->nand_data;
 	int exec_cmd;
+
+#if (PXA3XX_NAND_DMA_DEBUG == 1)
+	debug_push_info(mtd, command, page_addr);
+#endif
 
 	/*
 	 * if this is a x16 device ,then convert the input
@@ -2933,6 +2713,17 @@ static void pxa3xx_nand_cmdfunc(struct mtd_info *mtd, unsigned command,
 		nand_writel(nand, NDTR1CS0, info->ndtr1cs0);
 	}
 
+	if (info->eslc_mode && nand->p_slc) {
+		struct pxa3xx_nand_slc *slc = nand->p_slc;
+		if(info->eslc_mode == 2) {
+			page_addr = slc->slc_start(slc->priv,
+				command, page_addr);
+		} else {
+			page_addr = slc->eslc_start(slc->priv,
+				command, page_addr);
+		}
+	}
+
 	nand->state = STATE_PREPARED;
 	exec_cmd = prepare_command_pool(info, command, column, page_addr);
 	if (exec_cmd) {
@@ -2944,6 +2735,14 @@ static void pxa3xx_nand_cmdfunc(struct mtd_info *mtd, unsigned command,
 		}
 	}
 
+	if (info->eslc_mode && nand->p_slc) {
+		struct pxa3xx_nand_slc *slc = nand->p_slc;
+		if(info->eslc_mode == 2) {
+			slc->slc_stop(slc->priv, command);
+		} else {
+			slc->eslc_stop(slc->priv, command);
+		}
+	}
 	nand->state = STATE_IDLE;
 }
 
@@ -2957,13 +2756,6 @@ static int pxa3xx_nand_write_page_hwecc(struct mtd_info *mtd,
 	uint8_t *oob = chip->oob_poi;
 	int randomized = 0;
 	int pages_per_blk = 1 << (info->erase_shift - info->page_shift);
-
-	if (is_buf_blank((uint8_t *)buf, mtd->writesize) &&
-	    is_buf_blank(oob, mtd->oobsize)) {
-		nand->command = NAND_CMD_NONE;
-		printk("[%s,%d]\n", __func__, __LINE__);
-		return 0;
-	}
 
 	if (info->n_planes == 2) {
 		int page_addr = dp_page_addr_to_sp(info, nand->page_addr);
@@ -3066,6 +2858,7 @@ again:
 skip_map:
 	nand->data_buff = (unsigned char *)buf;
 	nand->oob_buff = oob;
+	nand->nand_sts.page_written++;
 	return 0;
 }
 #else
@@ -3076,12 +2869,6 @@ static int pxa3xx_nand_write_page_hwecc(struct mtd_info *mtd,
 	struct pxa3xx_nand *nand = info->nand_data;
 	dma_addr_t mapped_addr = 0;
 	uint8_t *oob = chip->oob_poi;
-
-	if (is_buf_blank((uint8_t *)buf, mtd->writesize) &&
-	    is_buf_blank(oob, mtd->oobsize)) {
-		nand->command = NAND_CMD_NONE;
-		return 0;
-	}
 
 	if (use_dma) {
 		mapped_addr = map_addr(nand, (void *)buf,
@@ -3106,11 +2893,12 @@ static int pxa3xx_nand_write_page_hwecc(struct mtd_info *mtd,
 
 	nand->data_buff = (unsigned char *)buf;
 	nand->oob_buff = oob;
+	nand->nand_sts.page_written++;
 	return 0;
 }
 #endif /* CONFIG_BERLIN_NAND_RANDOMIZER */
 
-static int pxa3xx_read_page(struct mtd_info *mtd, uint8_t *buf, int page)
+int pxa3xx_read_page(struct mtd_info *mtd, uint8_t *buf, int page)
 {
 	struct pxa3xx_nand_info *info = mtd->priv;
 	struct nand_chip *chip = mtd->priv;
@@ -3120,6 +2908,12 @@ static int pxa3xx_read_page(struct mtd_info *mtd, uint8_t *buf, int page)
 	int need_copy_back = 0;
 	int buf_blank = 0;
 
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	struct pxa3xx_nand_read_retry *retry = nand->retry;
+	int retry_c = 0;
+
+read_retry:
+#endif
 	if (use_dma) {
 again:
 		if (buf) {
@@ -3131,9 +2925,11 @@ again:
 							__func__);
 					return -ENOMEM;
 				}
-                                // TODO(ghines): bounce buffer message removed,
-                                // driver should be fixed so this never
-                                // happens.
+				printk(KERN_DEBUG "[%s,%d] nand page %08X "
+						"direct map buf %p error, "
+						"try bounce buffer\n",
+						__func__, __LINE__,
+						nand->page_addr, buf);
 				buf = nand->bounce_buffer;
 				need_copy_back = 1;
 				goto again;
@@ -3155,16 +2951,25 @@ again:
 	if (nand->use_mapped_buf)
 		unmap_addr(&nand->pdev->dev, mapped_addr,
 			   buf, mtd->writesize, DMA_FROM_DEVICE);
-
-	if (nand->retcode == ERR_SBERR) {
+	if (nand->retcode == ERR_NONE)
+		nand->nand_sts.page_count_err_0++;
+	else if (nand->retcode == ERR_SBERR) {
 		switch (nand->ecc_strength) {
 		default:
-			if (nand->bad_count > BCH_THRESHOLD)
-				mtd->ecc_stats.corrected +=
-					(nand->bad_count - BCH_THRESHOLD);
+			mtd->ecc_stats.corrected += nand->bad_count;
+			nand->nand_sts.corrected_err_bits += nand->bad_count;
+			if (nand->bad_count == 1)
+				nand->nand_sts.page_count_err_1++;
+			else if (nand->bad_count < nand->nand_sts.err_l1) {
+				nand->nand_sts.page_count_err_l1++;
+			} else if (nand->bad_count < nand->nand_sts.err_l2){
+				nand->nand_sts.page_count_err_l2++;
+			} else {
+				nand->nand_sts.page_count_err_l3++;
+			}
 			break;
 		case HAMMING_STRENGTH:
-			mtd->ecc_stats.corrected ++;
+			mtd->ecc_stats.corrected++;
 		case 0:
 			break;
 		}
@@ -3174,21 +2979,57 @@ again:
 		 * 0, which is different from the ECC information within
 		 * OOB, ignore such double bit errors
 		 */
-		if (is_read_datbuf_blank(nand->ecc_strength, mtd->writesize,
-			nand->data_buff, mtd->writesize)) {
+		int oob_len;
+		oob_len = info->n_planes == 2 ? 64 : 32;
+		if (is_read_page_blank(nand->ecc_strength, nand->data_buff,
+			nand->oob_buff, mtd->writesize, oob_len, info->n_planes)) {
 			nand->retcode = ERR_NONE;
+			memset(nand->data_buff, 0xff, mtd->writesize);
+			memset(nand->oob_buff, 0xff, oob_len);
 			buf_blank = 1;
+			nand->nand_sts.page_count_blank++;
 		}
-		else
+		else {
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+			if (retry->rr_table_ready == 1) {
+				retry_c++;
+				if (retry_c <= retry->rr_cycles) {
+					retry->rr_current_cycle++;
+					retry->rr_current_cycle %= retry->rr_cycles;
+					printk(KERN_DEBUG "page %x rd error, retrying %d/%d\n",
+						page, retry->rr_current_cycle, retry->rr_cycles);
+					retry->set_rr(nand, retry->rr_current_cycle);
+					buf = orig_buf;
+					need_copy_back = buf_blank = mapped_addr = 0;
+					pxa3xx_nand_cmdfunc(mtd, NAND_CMD_READ0, 0x00, page);
+					goto read_retry;
+				}
+			}
+#endif
+			if (nand->bad_count >= nand->nand_sts.err_l2)
+				nand->nand_sts.page_count_err_l3++;
 			mtd->ecc_stats.failed++;
+			nand->nand_sts.uncorrect_page_cnt++;
+			nand->nand_sts.uncerr_pn_rec[nand->nand_sts.rec_idx] = page;
+			nand->nand_sts.rec_idx++;
+			if (nand->nand_sts.rec_idx > UNCERR_REC_DEPTH)
+				nand->nand_sts.rec_idx = 0;
+			printk(KERN_ERR "uncorrectable ECC error @ page 0x%x\n", page);
+		}
 	}
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	if (retry_c)
+		printk(KERN_INFO "read %s with %d retry @ page %x\n",
+			retry_c > retry->rr_cycles ? "failed" : "done",
+			retry_c > retry->rr_cycles ? (retry_c - 1) : retry_c, page);
+#endif
 
 #ifdef CONFIG_BERLIN_NAND_RANDOMIZER
 	if (buf_blank)
 		goto skip_derandomize;
 	if (info->n_planes == 2) {
 		int pages_per_blk = 1 << (info->erase_shift - info->page_shift);
-		page = dp_page_addr_to_sp(info, page);;
+		page = dp_page_addr_to_sp(info, page);
 		nand_read_page_post_process(mtd, page,
 				nand->data_buff, nand->oob_buff,
 				nand->data_buff, nand->oob_buff);
@@ -3198,7 +3039,7 @@ again:
 				nand->data_buff + info->page_size,
 				nand->oob_buff + 32);
 	} else {
-		nand_read_page_post_process(mtd, page, nand->data_buff,
+		nand_read_page_post_process(mtd, nand->page_addr, nand->data_buff,
 				nand->oob_buff, nand->data_buff, nand->oob_buff);
 	}
 skip_derandomize:
@@ -3216,7 +3057,81 @@ skip_derandomize:
 	if (need_copy_back)
 		memcpy(orig_buf, nand->data_buff, mtd->writesize);
 
+	nand->nand_sts.page_read++;
 	return 0;
+}
+
+static void free_dummy_rd_buf(struct pxa3xx_nand *nand)
+{
+
+	if (nand->drd_buf != NULL) {
+		unmap_addr(&nand->pdev->dev, nand->drd_dma_addr,
+			nand->drd_buf, NAND_MAX_PAGESIZE*2,
+			DMA_FROM_DEVICE);
+		kfree(nand->drd_buf);
+		nand->drd_buf = NULL;
+		nand->drd_dma_addr = (dma_addr_t)0;
+	}
+}
+
+static int alloc_dummy_rd_buf(struct pxa3xx_nand *nand)
+{
+	if (nand->drd_buf == NULL) {
+		nand->drd_buf = kmalloc(NAND_MAX_PAGESIZE*2,
+					GFP_KERNEL);
+		if (nand->drd_buf == NULL) {
+			printk(KERN_ERR "dummy read malloc failed !!!\n");
+			return -ENOMEM;
+		}
+		nand->drd_dma_addr = map_addr(nand,
+			(void *)nand->drd_buf,
+			NAND_MAX_PAGESIZE*2, DMA_FROM_DEVICE);
+		if (dma_mapping_error(&nand->pdev->dev, nand->drd_dma_addr)) {
+			printk(KERN_ERR "%s: can't map DMA buffer\n",
+					__func__);
+			kfree(nand->drd_buf);
+			nand->drd_dma_addr = (dma_addr_t)0;
+			nand->drd_buf = NULL;
+			return -ENOMEM;
+		}
+		printk(KERN_INFO "dummy read map done!!! \n");
+	}
+	return 0;
+}
+
+int pxa3xx_dummy_read(struct mtd_info *mtd, int page)
+{
+	struct pxa3xx_nand_info *info = mtd->priv;
+	struct pxa3xx_nand *nand = info->nand_data;
+	int ret;
+
+	pxa3xx_nand_cmdfunc(mtd, NAND_CMD_READ0, 0x00, page);
+
+	if(nand->drd_buf == NULL){
+		if (alloc_dummy_rd_buf(nand) != 0) {
+			return -ENOMEM;
+		}
+	}
+
+#if (PXA3XX_NAND_DMA_DEBUG == 1)
+	debug_push_info(mtd, NAND_CMD_READ0 | 0x200, page);
+#endif
+	udelay(10);
+	mv88dexx_nand_dma_start(info, 1);
+
+	init_completion(&nand->cmd_complete);
+
+	mv88dexx_nand_dma_fill_read_desc(info, page,
+			nand->drd_dma_addr,
+			nand->drd_dma_addr + NAND_MAX_PAGESIZE);
+	mv88dexx_nand_dma_read_go(nand);
+	ret = wait_for_completion_timeout(&nand->cmd_complete,
+			CHIP_DELAY_TIMEOUT);
+	if (!ret) {
+		printk(KERN_ERR "pxa3xx_dummy_read  time out!!!\n");
+	}
+
+	return ret;
 }
 
 static int pxa3xx_nand_read_page_hwecc(struct mtd_info *mtd,
@@ -3231,6 +3146,17 @@ static int pxa3xx_nand_read_oob(struct mtd_info *mtd, struct nand_chip *chip,
 	pxa3xx_nand_cmdfunc(mtd, NAND_CMD_READOOB, 0, page);
 	pxa3xx_read_page(mtd, NULL, page);
 	return 0;
+}
+
+int pxa3xx_nand_intern_read(struct pxa3xx_nand *nand, uint8_t *buf, int page)
+{
+	int ret;
+	struct mtd_info *mtd = get_mtd_by_info(nand->info[0]);
+
+	pxa3xx_nand_cmdfunc(mtd, NAND_CMD_READ0, 0x00, page);
+	ret = pxa3xx_read_page(mtd, buf, page);
+
+	return ret;
 }
 
 static uint8_t pxa3xx_nand_read_byte(struct mtd_info *mtd)
@@ -3284,7 +3210,7 @@ static int pxa3xx_nand_scan_bbt(struct mtd_info *mtd)
 {
 	struct pxa3xx_nand_info *info = mtd->priv;
 
-	if (info->n_planes == DUAL_PLANE)
+	if ((info->n_planes == MTD_DUAL_PLANE) || info->eslc_mode)
 		return 0;
 
 	return nand_default_bbt(mtd);
@@ -3309,10 +3235,62 @@ static int pxa3xx_nand_block_markbad(struct mtd_info *mtd_dp, loff_t ofs)
 	return ret;
 }
 
-static int pxa3xx_nand_get_planes(struct mtd_info *mtd)
+static int pxa3xx_nand_slc_markbad(struct mtd_info *mtd_src, loff_t ofs)
+{
+	struct nand_chip *chip;
+	//struct pxa3xx_nand_info *src_info = mtd_src->priv;
+	struct mtd_info *mtd_mlc;
+	struct pxa3xx_nand_info *slc_info = mtd_src->priv;
+	struct pxa3xx_nand *nand = slc_info->nand_data;
+	int ret = 0;
+
+	mtd_mlc = get_mtd_by_info(nand->info[slc_info->chip_select]);
+	chip = mtd_mlc->priv;
+	if (slc_info->eslc_mode == 1) {
+		loff_t dst;
+		dst = nand->p_slc->eslc_get_phy_off(
+				nand->p_slc->priv, ofs);
+
+		printk("eslc markbad %llx -> %llx", ofs, dst);
+		ofs = dst;
+	} else if (slc_info->eslc_mode == 2) {
+		loff_t dst;
+		dst = nand->p_slc->slc_get_phy_off(
+				nand->p_slc->priv, ofs);
+		printk("slc markbad %llx -> %llx", ofs, dst);
+		ofs = dst;
+	} else {
+		return -EINVAL;
+	}
+
+	if (chip->block_markbad) {
+		ret = chip->block_markbad(mtd_mlc, ofs);
+	}
+	return ret;
+}
+
+static int pxa3xx_nand_get_mtd_info(struct mtd_info *mtd, loff_t off, loff_t *dst)
 {
 	struct pxa3xx_nand_info *info = mtd->priv;
-	return info->n_planes;
+
+	*dst = off;
+	if (info->eslc_mode == 1) {
+		struct pxa3xx_nand *nand = info->nand_data;
+		if (nand->p_slc) {
+			*dst = nand->p_slc->eslc_get_phy_off(
+				nand->p_slc->priv, off);
+		}
+		return MTD_ESLC;
+	} else if (info->eslc_mode == 2) {
+		struct pxa3xx_nand *nand = info->nand_data;
+		if (nand->p_slc) {
+			*dst = nand->p_slc->slc_get_phy_off(
+				nand->p_slc->priv, off);
+		}
+		return MTD_SLC;
+	} else {
+		return info->n_planes;
+	}
 }
 
 static void pxa3xx_nand_select_chip(struct mtd_info *mtd, int chip)
@@ -3549,6 +3527,7 @@ static int pxa3xx_nand_config_flash(struct pxa3xx_nand_info *info,
 		info->has_dual_plane = 0;
 	}
 	info->n_planes = 1; /* use single plane by default */
+	info->eslc_mode = 0;
 
 	/* calculate addressing information */
 	info->col_addr_cycles = (f->page_size >= 2048) ? 2 : 1;
@@ -3650,6 +3629,9 @@ static int pxa3xx_nand_scan(struct mtd_info *mtd, int type_plane)
 	uint16_t* id;
 	uint64_t chipsize;
 	int i, ret, num;
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	struct pxa3xx_nand_read_retry *retry = nand->retry;
+#endif
 
 	nand->chip_select = info->chip_select;
 
@@ -3669,6 +3651,7 @@ static int pxa3xx_nand_scan(struct mtd_info *mtd, int type_plane)
 	if (id[0] != 0)
 		printk(KERN_INFO "Detect a flash id %x, ext id %x\n", id[0], id[1]);
 	else {
+		printk(KERN_INFO "NAND_CMD_READID failed, id %x, ext id %x\n", id[0], id[1]);
 		pxa3xx_nand_dump_registers(info);
 		free_cs_resource(info, nand->chip_select);
 		return -EINVAL;
@@ -3705,11 +3688,25 @@ static int pxa3xx_nand_scan(struct mtd_info *mtd, int type_plane)
 	chipsize = (uint64_t)f->num_blocks * f->page_per_block * f->page_size;
 	pxa3xx_flash_ids[0].erasesize =
 		f->page_size * f->page_per_block * info->n_planes;
+
 	if (type_plane == TYPE_DUAL_PLANE) {
 		info->n_planes = 2;
 		pxa3xx_flash_ids[0].pagesize *= 2;
 		pxa3xx_flash_ids[0].erasesize *= 2;
+	} else if (type_plane == TYPE_E_SLC) {
+		mtd->erasesize /= 2;
+		pxa3xx_flash_ids[0].erasesize /= 2;
+		info->eslc_mode = 1;
+		info->erase_shift -= 1;
+		info->erase_size /= 2;
+	} else if (type_plane == TYPE_SLC) {
+		mtd->erasesize /= 2;
+		pxa3xx_flash_ids[0].erasesize /= 2;
+		info->eslc_mode = 2;
+		info->erase_shift -= 1;
+		info->erase_size /= 2;
 	}
+
 	pxa3xx_flash_ids[0].chipsize = chipsize >> 20;
 	if (f->flash_width == 16)
 		pxa3xx_flash_ids[0].options = NAND_BUSWIDTH_16;
@@ -3737,8 +3734,15 @@ static int pxa3xx_nand_scan(struct mtd_info *mtd, int type_plane)
 
 	chip->options = (info->reg_ndcr & NDCR_DWIDTH_M) ? NAND_BUSWIDTH_16 : 0;
 	chip->options |= NAND_OWN_BUFFERS;
+#ifdef CONFIG_BERLIN2CD
+	/*set this flag to skip nand_check_wp(), not needed for internal flash*/
+	chip->options |= NAND_BROKEN_XD;
+#endif
 	chip->bbt_options = NAND_BBT_USE_FLASH;
-	//chip->options |= NAND_USE_FLASH_BBT | NAND_USE_FLASH_BBT_WITH_BBM;
+
+	nand->nand_sts.err_l1 = (f->ecc_strength>>2) + 1;
+	nand->nand_sts.err_l2 = (f->ecc_strength>>1) + 1;
+	nand->nand_sts.ecc_strength = f->ecc_strength;
 
 	if ((f->chip_id == 0xd7ec && f->ext_id == 0x7a94) ||
 			(f->chip_id == 0xd7ec && f->ext_id == 0x7e94) ||
@@ -3749,8 +3753,15 @@ static int pxa3xx_nand_scan(struct mtd_info *mtd, int type_plane)
 			(f->chip_id == 0xd7ad && f->ext_id == 0x9a94) ||
 			(f->chip_id == 0x482c && f->ext_id == 0x4a04) ||
 			(f->chip_id == 0x682c && f->ext_id == 0x4a04) ||
+			(f->chip_id == 0x682c && f->ext_id == 0x4604) ||
 			(f->chip_id == 0x882c && f->ext_id == 0x4b04) ||
-			(f->chip_id == 0x682c && f->ext_id == 0x4604))
+			(f->chip_id == 0xdead && f->ext_id == 0xda94) ||
+			(f->chip_id == 0xd5ad && f->ext_id == 0xda94) ||
+			(f->chip_id == 0xdac8 && f->ext_id == 0x9590) ||
+			(f->chip_id == 0xdcc8 && f->ext_id == 0x9590) ||
+			(f->chip_id == 0xda98 && f->ext_id == 0x1590) ||
+			(f->chip_id == 0xdc98 && f->ext_id == 0x1591) ||
+			(f->chip_id == 0xdaad && f->ext_id == 0x9590))
 		chip->ecc.layout = &nand_oob_128;
 
 	printk("mtd_info: writesize=0x%X, oobsize=0x%X, erasesize=0x%X size=%llX\n",
@@ -3762,11 +3773,33 @@ static int pxa3xx_nand_scan(struct mtd_info *mtd, int type_plane)
 	if (use_dma) {
 		if (type_plane == TYPE_DUAL_PLANE) {
 			mv88dexx_nand_dma_init_dp_write_desc(info);
-		} else {
+			mv88dexx_nand_dma_init_read_desc(info);
+		} else if(type_plane == TYPE_SINGLE_PLANE) {
 			mv88dexx_nand_dma_init_write_desc(info);
+			mv88dexx_nand_dma_init_read_desc(info);
 		}
-		mv88dexx_nand_dma_init_read_desc(info);
 	}
+
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	if (type_plane == TYPE_SINGLE_PLANE) {
+		switch (f->chip_id) {
+		case 0xdead:
+		case 0xd5ad:
+			if (f->ext_id == 0xda94)
+				retry->rr_type = HYNIX_H27UCG8T_RR_MODE1;
+			break;
+		default:
+			retry->rr_type = NO_READ_RETRY;
+		}
+
+		if (berlin_nand_rr_init(nand, pxa3xx_flash_ids) != 0) {
+			printk("RR init failed!!!\n");
+			retry->rr_type = NO_READ_RETRY;
+		} else {
+			printk("RR init done!!!\n");
+		}
+	}
+#endif
 
 	/*
 	 * This is the second phase of the normal nand_scan() function. It
@@ -3776,19 +3809,165 @@ static int pxa3xx_nand_scan(struct mtd_info *mtd, int type_plane)
 	return nand_scan_tail(mtd);
 }
 
-static int pxa3xx_dp_info_fill(struct pxa3xx_nand *nand,
-		struct mtd_info *mtd_dp, struct mtd_info *mtd_sp, int cs)
+static int pxa3xx_info_fill(struct pxa3xx_nand *nand,
+		struct mtd_info *mtd_dst, struct mtd_info *mtd_src,
+		int cs, int type)
 {
 	struct pxa3xx_nand_info *info;
 	int  info_size = sizeof(struct mtd_info) +
 		sizeof(struct pxa3xx_nand_info);
 
-	memcpy(mtd_dp, mtd_sp, info_size);
-	info = (struct pxa3xx_nand_info *)(&mtd_dp[1]);
+	memcpy(mtd_dst, mtd_src, info_size);
+	info = (struct pxa3xx_nand_info *)(&mtd_dst[1]);
 	info->nand_data = nand;
-	mtd_dp->priv = info;
-	nand->info_dp[cs] = info;
+	mtd_dst->priv = info;
+	switch (type) {
+		case TYPE_DUAL_PLANE:
+			nand->info_dp[cs] = info;
+		break;
+		case TYPE_E_SLC:
+			nand->info_eslc[cs] = info;
+		break;
+		case TYPE_SLC:
+			nand->info_slc[cs] = info;
+		break;
+	}
+	return 0;
+}
 
+
+
+static ssize_t ecc_sts_show(struct device *pdev, struct device_attribute *attr,
+			   char *buf)
+{
+	struct pxa3xx_nand *nand = dev_get_drvdata(pdev);
+	int size;
+
+	size = snprintf(buf, PAGE_SIZE,
+		"NAND ecc capability:    %12d\n"
+		"  Level 1 threshold:    %12d\n"
+		"  Level 2 threshold:    %12d\n"
+		"Total corrected bits:   %12d\n"
+		"Error distributions: \n"
+		"  Uncorrected pages:    %12d\n"
+		"  0 err pages:          %12d\n"
+		"  1 err pages:          %12d\n"
+		"  [2, %d] err pages:    %12d\n"
+		"  [%d, %d] err pages:   %12d\n"
+		"  >=%d err pages:       %12d\n"
+		"  Blank pages:          %12d\n",
+		nand->nand_sts.ecc_strength,
+		nand->nand_sts.err_l1,
+		nand->nand_sts.err_l2,
+		nand->nand_sts.corrected_err_bits,
+		nand->nand_sts.uncorrect_page_cnt,
+		nand->nand_sts.page_count_err_0,
+		nand->nand_sts.page_count_err_1,
+		nand->nand_sts.err_l1-1,
+		nand->nand_sts.page_count_err_l1,
+		nand->nand_sts.err_l1,
+		nand->nand_sts.err_l2-1,
+		nand->nand_sts.page_count_err_l2,
+		nand->nand_sts.err_l2,
+		nand->nand_sts.page_count_err_l3,
+		nand->nand_sts.page_count_blank);
+
+	return size;
+}
+
+static ssize_t ecc_sts_store(struct device *pdev, struct device_attribute *attr,
+			    const char *buf, size_t size)
+{
+	struct pxa3xx_nand *nand = dev_get_drvdata(pdev);
+	int l1 = 0, l2 = 0;
+	sscanf(buf, "%d %d", &l1, &l2);
+	printk("set err_l %d %d %d\n", l1, l2, nand->nand_sts.ecc_strength);
+	if ((l2 > l1) && (l1 > 0) && (l2 < nand->nand_sts.ecc_strength)) {
+		nand->nand_sts.err_l1 = l1;
+		nand->nand_sts.err_l2 = l2;
+	}
+	return size;
+}
+
+static ssize_t rw_sts_show(struct device *pdev, struct device_attribute *attr,
+			   char *buf)
+{
+	struct pxa3xx_nand *nand = dev_get_drvdata(pdev);
+	int size;
+
+	size = sprintf(buf, "page RD cnt: \t[%d]\npage WR cnt: \t[%d]\n"
+		"block erase cnt: \t[%d]\n",
+		nand->nand_sts.page_read, nand->nand_sts.page_written,
+		nand->nand_sts.block_erased);
+	return size;
+}
+
+static ssize_t unc_err_rec_show(struct device *pdev, struct device_attribute *attr,
+			   char *buf)
+{
+	struct pxa3xx_nand *nand = dev_get_drvdata(pdev);
+	int i, pn, size;
+
+	pn = (nand->nand_sts.uncorrect_page_cnt >= UNCERR_REC_DEPTH) ?
+		UNCERR_REC_DEPTH : nand->nand_sts.uncorrect_page_cnt;
+
+	size = snprintf(buf, PAGE_SIZE, "===== uncorrectable erro record =====\n"
+			"Total error numbers: %d, latest %d RECs:\n",
+			nand->nand_sts.uncorrect_page_cnt,
+			pn);
+	i = nand->nand_sts.rec_idx;
+	while(pn) {
+		if (i)
+			i--;
+		else
+			i = UNCERR_REC_DEPTH - 1;
+
+		size += snprintf(buf+size, PAGE_SIZE-size, "page: [0x%x]\n",
+			nand->nand_sts.uncerr_pn_rec[i]);
+		pn--;
+	}
+	return size;
+}
+
+static DEVICE_ATTR(ecc_sts, S_IRUGO | S_IWUSR, ecc_sts_show, ecc_sts_store);
+static DEVICE_ATTR(rw_sts, S_IRUGO | S_IWUSR, rw_sts_show, NULL);
+static DEVICE_ATTR(uncerr_rec, S_IRUGO | S_IWUSR, unc_err_rec_show, NULL);
+
+static struct device_attribute *nand_sts[] = {
+	&dev_attr_ecc_sts,
+	&dev_attr_rw_sts,
+	&dev_attr_uncerr_rec,
+	NULL
+};
+
+static int nand_create_device(struct pxa3xx_nand *nand)
+{
+	struct device_attribute **attrs = nand_sts;
+	struct device_attribute *attr;
+	struct device *dev;
+	int err;
+
+	nand_class = class_create(THIS_MODULE, "nfc");
+	if (IS_ERR(nand_class))
+		return PTR_ERR(nand_class);
+
+	dev = device_create(nand_class, NULL,
+					MKDEV(233, 0), NULL, "statistics");
+
+	if (IS_ERR(dev)) {
+		class_destroy(nand_class);
+		return PTR_ERR(dev);
+	}
+	dev_set_drvdata(dev, nand);
+
+	while ((attr = *attrs++)) {
+		err = device_create_file(dev, attr);
+		if (err) {
+			device_destroy(nand_class, dev->devt);
+			class_destroy(nand_class);
+			return err;
+		}
+	}
 	return 0;
 }
 
@@ -3797,11 +3976,14 @@ static int alloc_nand_resource(struct platform_device *pdev)
 	struct pxa3xx_nand_platform_data *pdata;
 	struct pxa3xx_nand_info *info;
 	struct nand_chip *chip;
-	struct mtd_info *mtd;
+	struct mtd_info *mtd, *mtd_dp, *mtd_eslc, *mtd_slc;
 	struct pxa3xx_nand *nand;
 	struct resource *r;
 	int ret, irq, cs;
 	struct device_node *np = pdev->dev.of_node;
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	struct pxa3xx_nand_read_retry *retry;
+#endif
 
 	pdata = pdev->dev.platform_data;
 	nand = kzalloc(sizeof(struct pxa3xx_nand), GFP_KERNEL);
@@ -3811,6 +3993,16 @@ static int alloc_nand_resource(struct platform_device *pdev)
 	}
 
 	nand->pdev = pdev;
+
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	retry = kzalloc(sizeof(struct pxa3xx_nand_read_retry), GFP_KERNEL);
+	if (!retry) {
+		dev_err(&pdev->dev, "failed to allocate memory\n");
+		kfree(nand);
+		return -ENOMEM;
+	}
+	nand->retry = retry;
+#endif
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (r == NULL) {
@@ -3907,12 +4099,16 @@ static int alloc_nand_resource(struct platform_device *pdev)
 		 *  if chip doesn't support dual plane,
 		 *  so it's better if it has a dedicated allocation action
 		 */
-		mtd = kzalloc(info_size * 2, GFP_KERNEL);
+		mtd = kzalloc(info_size * 4, GFP_KERNEL);
 		if (!mtd) {
 			dev_err(&pdev->dev, "failed to allocate memory\n");
 			ret = -ENOMEM;
 			goto fail_free_buf;
 		}
+
+		mtd_dp = (struct mtd_info *)((char *)mtd + info_size);
+		mtd_eslc = (struct mtd_info *)((char *)mtd_dp + info_size);
+		mtd_slc = (struct mtd_info *)((char *)mtd_eslc + info_size);
 
 		info = (struct pxa3xx_nand_info *)(&mtd[1]);
 		info->nand_data = nand;
@@ -3942,13 +4138,15 @@ static int alloc_nand_resource(struct platform_device *pdev)
 		chip->read_byte		= pxa3xx_nand_read_byte;
 		chip->read_buf		= pxa3xx_nand_read_buf;
 		chip->write_buf		= pxa3xx_nand_write_buf;
-		chip->get_planes	= pxa3xx_nand_get_planes;
+		chip->get_mtd_info	= pxa3xx_nand_get_mtd_info;
 		chip->scan_bbt		= pxa3xx_nand_scan_bbt;
 
-		pxa3xx_dp_info_fill(nand,
-			(struct mtd_info *)((char *)mtd + info_size), mtd, cs);
+		pxa3xx_info_fill(nand, mtd_dp, mtd, cs, TYPE_DUAL_PLANE);
+		pxa3xx_info_fill(nand, mtd_eslc, mtd, cs, TYPE_E_SLC);
+		pxa3xx_info_fill(nand, mtd_slc, mtd, cs, TYPE_SLC);
 	}
 
+	nand_create_device(nand);
 	return 0;
 
 fail_free_buf:
@@ -3973,6 +4171,9 @@ fail_free_irq:
 fail_free_io:
 	release_mem_region(r->start, resource_size(r));
 fail_alloc:
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	kfree(retry);
+#endif
 	kfree(nand);
 	return ret;
 }
@@ -4004,6 +4205,7 @@ static int pxa3xx_nand_remove(struct platform_device *pdev)
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	release_mem_region(r->start, resource_size(r));
+	free_dummy_rd_buf(nand);
 
 	for (cs = 0; cs < pdata->cs_num; cs++) {
 		info = nand->info[cs];
@@ -4022,11 +4224,16 @@ static int pxa3xx_nand_remove(struct platform_device *pdev)
 #ifdef CONFIG_BERLIN_NAND_RANDOMIZER
 	nand_randomizer_release(pdev);
 #endif /* CONFIG_BERLIN_NAND_RANDOMIZER */
+#ifdef CONFIG_BERLIN_NAND_READ_RETRY
+	berlin_nand_rr_exit(nand);
+#endif
 
 	if (pdata->controller_attrs & PXA3XX_PDATA_MALLOC) {
 		kfree(pdata);
 		pdev->dev.platform_data = NULL;
 	}
+
+	class_destroy(nand_class);
 	return 0;
 }
 
@@ -4073,6 +4280,10 @@ static int pxa3xx_parse_part_type(const struct mtd_partition *parts,
 		if ((part_name_len == name_len) && (strncmp(parts->name, name, name_len) == 0)) {
 			if (strncmp(p, "dp", 2) == 0) {
 				return TYPE_DUAL_PLANE;
+			} else if (strncmp(p, "eslc", 4) == 0) {
+				return TYPE_E_SLC;
+			} else if(strncmp(p, "slc", 3) == 0) {
+				return TYPE_SLC;
 			} else if(strncmp(p, "sp", 2) == 0) {
 				return TYPE_SINGLE_PLANE;
 			}
@@ -4111,14 +4322,14 @@ static struct pxa3xx_nand_platform_data *pxa3xx_nand_probe_dt(struct platform_de
 	return pdata;
 }
 
-
 static int pxa3xx_nand_probe(struct platform_device *pdev)
 {
 	struct pxa3xx_nand_platform_data *pdata;
 	struct pxa3xx_nand_info *info;
-	struct nand_chip *chip = NULL, *chip_dp = NULL;
+	struct nand_chip *chip = NULL, *chip_dp = NULL, *chip_eslc = NULL;
+	struct nand_chip *chip_slc = NULL;
 	struct pxa3xx_nand *nand;
-	struct mtd_info *mtd, *mtd_dp;
+	struct mtd_info *mtd, *mtd_dp, *mtd_eslc, *mtd_slc;
 	int cs, part_num, ret, nr_parts, probe_success;
 
 	probe_success = 0;
@@ -4152,8 +4363,12 @@ static int pxa3xx_nand_probe(struct platform_device *pdev)
 		info = nand->info[cs];
 		mtd = get_mtd_by_info(info);
 		mtd_dp = get_mtd_by_info(nand->info_dp[cs]);
+		mtd_eslc = get_mtd_by_info(nand->info_eslc[cs]);
+		mtd_slc = get_mtd_by_info(nand->info_slc[cs]);
 		chip = mtd->priv;
 		chip_dp = mtd_dp->priv;
+		chip_eslc = mtd_eslc->priv;
+		chip_slc = mtd_slc->priv;
 
 		if (pxa3xx_nand_scan(mtd, TYPE_SINGLE_PLANE)) {
 			dev_err(&pdev->dev, "failed to scan nand\n");
@@ -4167,7 +4382,19 @@ static int pxa3xx_nand_probe(struct platform_device *pdev)
 			continue;
 		}
 
-		chip_dp->bbt = chip->bbt;
+		chip_eslc->block_markbad = pxa3xx_nand_slc_markbad;
+		if (pxa3xx_nand_scan(mtd_eslc, TYPE_E_SLC)) {
+			dev_err(&pdev->dev, "failed to scan eslc nand\n");
+			continue;
+		}
+
+		chip_slc->block_markbad = pxa3xx_nand_slc_markbad;
+		if (pxa3xx_nand_scan(mtd_slc, TYPE_SLC)) {
+			dev_err(&pdev->dev, "failed to scan slc nand\n");
+			continue;
+		}
+
+		chip_slc->bbt = chip_eslc->bbt = chip_dp->bbt = chip->bbt;
 		ret = 0;
 		nr_parts = 0;
 
@@ -4179,14 +4406,45 @@ static int pxa3xx_nand_probe(struct platform_device *pdev)
 		if (info->has_dual_plane && plane_cmdline) {
 			printk(KERN_INFO "analyzing plane info\n");
 			for (part_num = 0; part_num < nr_parts; part_num++) {
-				if (pxa3xx_parse_part_type(&parts[part_num],
-							plane_cmdline)
-						== TYPE_DUAL_PLANE) {
+				int type = pxa3xx_parse_part_type(&parts[part_num],
+							plane_cmdline);
+				switch (type) {
+				case TYPE_DUAL_PLANE:
 					printk(KERN_INFO "dual plane part: %s\n",
 							parts[part_num].name);
 					ret = mtd_device_register(mtd_dp,
 							&parts[part_num], 1);
-				} else {
+				break;
+				case TYPE_E_SLC:
+					printk(KERN_INFO "e-slc part: %s, offset %llx\n",
+							parts[part_num].name,
+							parts[part_num].offset);
+					if (nand->p_slc) {
+						parts[part_num].size /= 2;
+						nand->p_slc->eslc_part_add(
+							nand->p_slc->priv,
+							&parts[part_num]);
+						ret = mtd_device_register(
+							mtd_eslc,
+							&parts[part_num], 1);
+					}
+
+				break;
+				case TYPE_SLC:
+					printk(KERN_INFO "slc part: %s, offset %llx\n",
+							parts[part_num].name,
+							parts[part_num].offset);
+					if (nand->p_slc) {
+						parts[part_num].size /= 2;
+						nand->p_slc->slc_part_add(
+							nand->p_slc->priv,
+							&parts[part_num]);
+						ret = mtd_device_register(
+							mtd_slc,
+							&parts[part_num], 1);
+					}
+				break;
+				default:
 					printk(KERN_INFO "sing plane part: %s\n",
 							parts[part_num].name);
 					ret = mtd_device_register(mtd,
@@ -4216,8 +4474,7 @@ add_predefined_parts:
 	if (!probe_success) {
 		pxa3xx_nand_remove(pdev);
 		return -ENODEV;
-	}
-	else
+	} else
 		return 0;
 }
 

@@ -76,6 +76,8 @@ HRESULT MV_CC_CBufSrv_Release_By_Taskid(MV_CC_Task *cc_task);
 void * MV_SHM_GetCacheVirtAddr(size_t Offset);
 int MV_SHM_Free( size_t Offset);
 size_t MV_SHM_Malloc( size_t Size, size_t Alignment);
+int MV_SHM_Takeover(size_t Offset);
 
+void MV_SHM_Check_Clean_Map(pid_t pid);
 
 #endif

@@ -52,8 +52,14 @@ Change log:
 #ifdef STA_SUPPORT
 /** Default firmware name */
 
-#define DEFAULT_FW_NAME	"mrvl/sd8801_uapsta.bin"
-
+#define DEFAULT_FW_NAME_8777 "mrvl/sd8777_uapsta.bin"
+#define DEFAULT_FW_NAME_8787 "mrvl/sd8787_uapsta.bin"
+#define DEFAULT_FW_NAME_8887 "mrvl/sd8887_uapsta.bin"
+#define DEFAULT_FW_NAME_8801 "mrvl/sd8801_uapsta.bin"
+#define DEFAULT_FW_NAME_8897 "mrvl/sd8897_uapsta.bin"
+#define DEFAULT_FW_NAME_8797 "mrvl/sd8797_uapsta.bin"
+#define SD8887_A0_FW_NAME    "mrvl/sd8887_uapsta.bin"
+#define SD8887_A2_FW_NAME    "mrvl/sd8887_uapsta_a2.bin"
 #ifndef DEFAULT_FW_NAME
 #define DEFAULT_FW_NAME ""
 #endif
@@ -62,8 +68,12 @@ Change log:
 #ifdef UAP_SUPPORT
 /** Default firmware name */
 
-#define DEFAULT_AP_FW_NAME "mrvl/sd8801_uapsta.bin"
-
+#define DEFAULT_AP_FW_NAME_8777 "mrvl/sd8777_uapsta.bin"
+#define DEFAULT_AP_FW_NAME_8787 "mrvl/sd8787_uapsta.bin"
+#define DEFAULT_AP_FW_NAME_8887 "mrvl/sd8887_uapsta.bin"
+#define DEFAULT_AP_FW_NAME_8801 "mrvl/sd8801_uapsta.bin"
+#define DEFAULT_AP_FW_NAME_8897 "mrvl/sd8897_uapsta.bin"
+#define DEFAULT_AP_FW_NAME_8797 "mrvl/sd8797_uapsta.bin"
 #ifndef DEFAULT_AP_FW_NAME
 #define DEFAULT_AP_FW_NAME ""
 #endif
@@ -71,8 +81,12 @@ Change log:
 
 /** Default firmaware name */
 
-#define DEFAULT_AP_STA_FW_NAME "mrvl/sd8801_uapsta.bin"
-
+#define DEFAULT_AP_STA_FW_NAME_8777 "mrvl/sd8777_uapsta.bin"
+#define DEFAULT_AP_STA_FW_NAME_8787 "mrvl/sd8787_uapsta.bin"
+#define DEFAULT_AP_STA_FW_NAME_8887 "mrvl/sd8887_uapsta.bin"
+#define DEFAULT_AP_STA_FW_NAME_8801 "mrvl/sd8801_uapsta.bin"
+#define DEFAULT_AP_STA_FW_NAME_8897 "mrvl/sd8897_uapsta.bin"
+#define DEFAULT_AP_STA_FW_NAME_8797 "mrvl/sd8797_uapsta.bin"
 #ifndef DEFAULT_AP_STA_FW_NAME
 #define DEFAULT_AP_STA_FW_NAME ""
 #endif
@@ -80,16 +94,18 @@ Change log:
 /********************************************************
 		Global Functions
 ********************************************************/
+/** Function to update the SDIO card type */
+t_void woal_sdio_update_card_type(moal_handle *handle, t_void *card);
 
 /** Function to write register */
-mlan_status woal_write_reg(moal_handle * handle, t_u32 reg, t_u32 data);
+mlan_status woal_write_reg(moal_handle *handle, t_u32 reg, t_u32 data);
 /** Function to read register */
-mlan_status woal_read_reg(moal_handle * handle, t_u32 reg, t_u32 * data);
+mlan_status woal_read_reg(moal_handle *handle, t_u32 reg, t_u32 *data);
 /** Function to write data to IO memory */
-mlan_status woal_write_data_sync(moal_handle * handle, mlan_buffer * pmbuf,
+mlan_status woal_write_data_sync(moal_handle *handle, mlan_buffer *pmbuf,
 				 t_u32 port, t_u32 timeout);
 /** Function to read data from IO memory */
-mlan_status woal_read_data_sync(moal_handle * handle, mlan_buffer * pmbuf,
+mlan_status woal_read_data_sync(moal_handle *handle, mlan_buffer *pmbuf,
 				t_u32 port, t_u32 timeout);
 
 /** Register to bus driver function */
@@ -98,16 +114,16 @@ mlan_status woal_bus_register(void);
 void woal_bus_unregister(void);
 
 /** Register device function */
-mlan_status woal_register_dev(moal_handle * handle);
+mlan_status woal_register_dev(moal_handle *handle);
 /** Unregister device function */
-void woal_unregister_dev(moal_handle * handle);
+void woal_unregister_dev(moal_handle *handle);
 
-int woal_sdio_set_bus_clock(moal_handle * handle, t_u8 option);
+int woal_sdio_set_bus_clock(moal_handle *handle, t_u8 option);
 
 #ifdef SDIO_SUSPEND_RESUME
 #ifdef MMC_PM_FUNC_SUSPENDED
 /** Notify SDIO bus driver that WLAN is suspended */
-void woal_wlan_is_suspended(moal_handle * handle);
+void woal_wlan_is_suspended(moal_handle *handle);
 #endif
 /** SDIO Suspend */
 int woal_sdio_suspend(struct device *dev);
@@ -126,7 +142,6 @@ struct sdio_mmc_card {
 };
 
 /** cmd52 read write */
-int woal_sdio_read_write_cmd52(moal_handle * handle, int func, int reg,
-			       int val);
+int woal_sdio_read_write_cmd52(moal_handle *handle, int func, int reg, int val);
 
 #endif /* _MOAL_SDIO_H */

@@ -28,7 +28,7 @@ Change log:
 #ifdef UAP_SUPPORT
 #include    "moal_uap.h"
 #endif
-#include 	"moal_sdio.h"
+#include    "moal_sdio.h"
 
 /********************************************************
 		Local Variables
@@ -76,7 +76,7 @@ woal_info_proc_read(struct seq_file *sfp, void *data)
 {
 	struct net_device *netdev = (struct net_device *)sfp->private;
 	char fmt[MLAN_MAX_VER_STR_LEN];
-	moal_private *priv = (moal_private *) netdev_priv(netdev);
+	moal_private *priv = (moal_private *)netdev_priv(netdev);
 #ifdef STA_SUPPORT
 	int i = 0;
 	moal_handle *handle = NULL;
@@ -169,7 +169,7 @@ woal_info_proc_read(struct seq_file *sfp, void *data)
 			   info.bssid[4], info.bssid[5]);
 		seq_printf(sfp, "channel=\"%d\"\n", (int)info.bss_chan);
 		seq_printf(sfp, "region_code = \"%02x\"\n",
-			   (t_u8) info.region_code);
+			   (t_u8)info.region_code);
 
 		/*
 		 * Put out the multicast list
@@ -298,14 +298,14 @@ parse_cmd52_string(const char *buffer, size_t len, int *func, int *reg,
 	int ret = MLAN_STATUS_SUCCESS;
 	char *string = NULL;
 	char *pos = NULL;
+	gfp_t flag;
 
 	ENTER();
-
-	string = (char *)kmalloc(CMD52_STR_LEN, GFP_KERNEL);
+	flag = (in_atomic() || irqs_disabled())? GFP_ATOMIC : GFP_KERNEL;
+	string = kzalloc(CMD52_STR_LEN, flag);
 	if (string == NULL)
 		return -ENOMEM;
 
-	memset(string, 0, CMD52_STR_LEN);
 	memcpy(string, buffer + strlen("sdcmd52rw="),
 	       MIN((CMD52_STR_LEN - 1), (len - strlen("sdcmd52rw="))));
 	string = strstrip(string);
@@ -351,7 +351,7 @@ woal_config_write(struct file *f, const char __user * buf, size_t count,
 	char *line = NULL;
 	t_u32 config_data = 0;
 	struct seq_file *sfp = f->private_data;
-	moal_handle *handle = (moal_handle *) sfp->private;
+	moal_handle *handle = (moal_handle *)sfp->private;
 
 	int func = 0, reg = 0, val = 0;
 	int copy_len;
@@ -378,7 +378,7 @@ woal_config_write(struct file *f, const char __user * buf, size_t count,
 	line = databuf;
 	if (!strncmp(databuf, "soft_reset", strlen("soft_reset"))) {
 		line += strlen("soft_reset") + 1;
-		config_data = (t_u32) woal_string_to_number(line);
+		config_data = (t_u32)woal_string_to_number(line);
 		PRINTM(MINFO, "soft_reset: %d\n", (int)config_data);
 		if (woal_request_soft_reset(handle) == MLAN_STATUS_SUCCESS)
 			handle->hardware_status = HardwareStatusReset;
@@ -387,9 +387,9 @@ woal_config_write(struct file *f, const char __user * buf, size_t count,
 	}
 	if (!strncmp(databuf, "drv_mode", strlen("drv_mode"))) {
 		line += strlen("drv_mode") + 1;
-		config_data = (t_u32) woal_string_to_number(line);
+		config_data = (t_u32)woal_string_to_number(line);
 		PRINTM(MINFO, "drv_mode: %d\n", (int)config_data);
-		if (config_data != (t_u32) drv_mode)
+		if (config_data != (t_u32)drv_mode)
 			if (woal_switch_drv_mode(handle, config_data) !=
 			    MLAN_STATUS_SUCCESS) {
 				PRINTM(MERROR, "Could not switch drv mode\n");
@@ -405,8 +405,11 @@ woal_config_write(struct file *f, const char __user * buf, size_t count,
 		priv = woal_get_priv(handle, MLAN_BSS_ROLE_ANY);
 		if (priv) {
 			PRINTM(MERROR, "Recevie debug_dump command\n");
+			drvdbg &= ~MFW_D;
 			woal_mlan_debug_info(priv);
 			woal_moal_debug_info(priv, NULL, MFALSE);
+
+			woal_dump_firmware_info(handle);
 		}
 	}
 
@@ -426,7 +429,7 @@ woal_config_write(struct file *f, const char __user * buf, size_t count,
 static int
 woal_config_read(struct seq_file *sfp, void *data)
 {
-	moal_handle *handle = (moal_handle *) sfp->private;
+	moal_handle *handle = (moal_handle *)sfp->private;
 
 	ENTER();
 
@@ -514,7 +517,7 @@ woal_string_to_number(char *s)
  *  @return         N/A
  */
 void
-woal_proc_init(moal_handle * handle)
+woal_proc_init(moal_handle *handle)
 {
 	struct proc_dir_entry *r;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
@@ -596,7 +599,7 @@ woal_proc_init(moal_handle * handle)
  *  @return         N/A
  */
 void
-woal_proc_exit(moal_handle * handle)
+woal_proc_exit(moal_handle *handle)
 {
 	ENTER();
 
@@ -640,7 +643,7 @@ woal_proc_exit(moal_handle * handle)
  *  @return         N/A
  */
 void
-woal_create_proc_entry(moal_private * priv)
+woal_create_proc_entry(moal_private *priv)
 {
 	struct proc_dir_entry *r;
 	struct net_device *dev = priv->netdev;
@@ -720,7 +723,7 @@ woal_create_proc_entry(moal_private * priv)
  *  @return         N/A
  */
 void
-woal_proc_remove(moal_private * priv)
+woal_proc_remove(moal_private *priv)
 {
 	ENTER();
 	if (priv->phandle->proc_mwlan && priv->proc_entry) {

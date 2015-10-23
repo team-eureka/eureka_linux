@@ -93,6 +93,7 @@ const chan_to_freq_t chan_to_freq[] = {
 	{132, 5660, 1},
 	{136, 5680, 1},
 	{140, 5700, 1},
+	{144, 5720, 1},
 	{149, 5745, 1},
 	{153, 5765, 1},
 	{157, 5785, 1},
@@ -214,7 +215,7 @@ static int
 woal_get_wap(struct net_device *dev, struct iw_request_info *info,
 	     struct sockaddr *awrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	int ret = 0;
 
 	ENTER();
@@ -244,7 +245,7 @@ woal_set_wap(struct net_device *dev, struct iw_request_info *info,
 	     struct sockaddr *awrq, char *extra)
 {
 	int ret = 0;
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	const t_u8 zero_mac[MLAN_MAC_ADDR_LENGTH] = { 0, 0, 0, 0, 0, 0 };
 
 	ENTER();
@@ -255,7 +256,7 @@ woal_set_wap(struct net_device *dev, struct iw_request_info *info,
 	}
 
 	PRINTM(MINFO, "ASSOC: WAP: uAP bss : " MACSTR "\n",
-	       MAC2STR((t_u8 *) awrq->sa_data));
+	       MAC2STR((t_u8 *)awrq->sa_data));
 
 	/*
 	 * Using this ioctl to start/stop the BSS, return if bss
@@ -295,7 +296,7 @@ static int
 woal_set_freq(struct net_device *dev, struct iw_request_info *info,
 	      struct iw_freq *fwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param *sys_cfg = NULL, *ap_cfg = NULL;
 	int ret = 0, chan = 0, i = 0;
 
@@ -377,7 +378,7 @@ static int
 woal_get_freq(struct net_device *dev, struct iw_request_info *info,
 	      struct iw_freq *fwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param ap_cfg;
 	t_u8 band = 0;
 	int ret = 0;
@@ -414,7 +415,7 @@ woal_get_freq(struct net_device *dev, struct iw_request_info *info,
  */
 static int
 woal_set_bss_mode(struct net_device *dev, struct iw_request_info *info,
-		  t_u32 * uwrq, char *extra)
+		  t_u32 *uwrq, char *extra)
 {
 	int ret = 0;
 	ENTER();
@@ -445,7 +446,7 @@ woal_set_bss_mode(struct net_device *dev, struct iw_request_info *info,
  */
 static int
 woal_get_bss_mode(struct net_device *dev, struct iw_request_info *info,
-		  t_u32 * uwrq, char *extra)
+		  t_u32 *uwrq, char *extra)
 {
 	ENTER();
 
@@ -470,7 +471,7 @@ woal_set_encode(struct net_device *dev, struct iw_request_info *info,
 		struct iw_point *dwrq, char *extra)
 {
 	int ret = 0;
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param *sys_cfg = NULL, *ap_cfg = NULL;
 	wep_key *pkey = NULL;
 	int key_index = 0;
@@ -646,7 +647,7 @@ static int
 woal_get_encode(struct net_device *dev, struct iw_request_info *info,
 		struct iw_point *dwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	int index = (dwrq->flags & IW_ENCODE_INDEX);
 	wep_key *pkey = NULL;
 	mlan_uap_bss_param ap_cfg;
@@ -763,7 +764,7 @@ static int
 woal_set_gen_ie(struct net_device *dev, struct iw_request_info *info,
 		struct iw_point *dwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param sys_cfg;
 	IEEEtypes_Header_t *tlv = NULL;
 	int tlv_hdr_len = sizeof(IEEEtypes_Header_t), tlv_buf_left = 0;
@@ -776,7 +777,7 @@ woal_set_gen_ie(struct net_device *dev, struct iw_request_info *info,
 	woal_set_sys_config_invalid_data(&sys_cfg);
 
 	tlv_buf_left = dwrq->length;
-	tlv = (IEEEtypes_Header_t *) extra;
+	tlv = (IEEEtypes_Header_t *)extra;
 	while (tlv_buf_left >= tlv_hdr_len) {
 		if (tlv->element_id == WPA_IE) {
 			sys_cfg.protocol |= PROTOCOL_WPA;
@@ -797,7 +798,7 @@ woal_set_gen_ie(struct net_device *dev, struct iw_request_info *info,
 				PRINTM(MINFO, "Set IE Cipher TKIP + CCMP\n");
 			}
 			memcpy(priv->bcn_ie_buf + priv->bcn_ie_len,
-			       ((t_u8 *) tlv),
+			       ((t_u8 *)tlv),
 			       sizeof(IEEEtypes_Header_t) + tlv->len);
 			priv->bcn_ie_len +=
 				sizeof(IEEEtypes_Header_t) + tlv->len;
@@ -818,7 +819,7 @@ woal_set_gen_ie(struct net_device *dev, struct iw_request_info *info,
 					(CIPHER_TKIP | CIPHER_AES_CCMP);
 			}
 			memcpy(priv->bcn_ie_buf + priv->bcn_ie_len,
-			       ((t_u8 *) tlv),
+			       ((t_u8 *)tlv),
 			       sizeof(IEEEtypes_Header_t) + tlv->len);
 			priv->bcn_ie_len +=
 				sizeof(IEEEtypes_Header_t) + tlv->len;
@@ -828,8 +829,8 @@ woal_set_gen_ie(struct net_device *dev, struct iw_request_info *info,
 		if (priv->group_cipher == CIPHER_AES_CCMP)
 			sys_cfg.wpa_cfg.group_cipher = CIPHER_AES_CCMP;
 		tlv_buf_left -= (tlv_hdr_len + tlv->len);
-		tlv = (IEEEtypes_Header_t *) ((t_u8 *) tlv + tlv_hdr_len +
-					      tlv->len);
+		tlv = (IEEEtypes_Header_t *)((t_u8 *)tlv + tlv_hdr_len +
+					     tlv->len);
 	}
 	sys_cfg.key_mgmt = priv->uap_key_mgmt;
 	if (sys_cfg.key_mgmt & KEY_MGMT_PSK)
@@ -889,7 +890,7 @@ woal_set_encode_ext(struct net_device *dev,
 		    struct iw_point *dwrq, char *extra)
 {
 	struct iw_encode_ext *ext = (struct iw_encode_ext *)extra;
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	int key_index;
 	t_u8 *pkey_material = NULL;
 	mlan_ioctl_req *req = NULL;
@@ -915,7 +916,7 @@ woal_set_encode_ext(struct net_device *dev,
 	   downloaded to firmware */
 	woal_set_sys_config_invalid_data(&sys_cfg);
 
-	pkey_material = (t_u8 *) (ext + 1);
+	pkey_material = (t_u8 *)(ext + 1);
 	/* Disable Key */
 	if ((dwrq->flags & IW_ENCODE_DISABLED) && !ext->key_len) {
 		sys_cfg.protocol = PROTOCOL_NO_SECURITY;
@@ -949,7 +950,7 @@ woal_set_encode_ext(struct net_device *dev,
 			ret = -ENOMEM;
 			goto done;
 		}
-		sec = (mlan_ds_sec_cfg *) req->pbuf;
+		sec = (mlan_ds_sec_cfg *)req->pbuf;
 		sec->sub_command = MLAN_OID_SEC_CFG_ENCRYPT_KEY;
 		req->req_id = MLAN_IOCTL_SEC_CFG;
 		req->action = MLAN_ACT_SET;
@@ -961,13 +962,13 @@ woal_set_encode_ext(struct net_device *dev,
 		       ETH_ALEN);
 		sec->param.encrypt_key.key_flags = ext->ext_flags;
 		if (ext->ext_flags & IW_ENCODE_EXT_RX_SEQ_VALID) {
-			memcpy(sec->param.encrypt_key.pn, (t_u8 *) ext->rx_seq,
+			memcpy(sec->param.encrypt_key.pn, (t_u8 *)ext->rx_seq,
 			       SEQ_MAX_SIZE);
 			DBG_HEXDUMP(MCMD_D, "Uap Rx PN",
 				    sec->param.encrypt_key.pn, SEQ_MAX_SIZE);
 		}
 		if (ext->ext_flags & IW_ENCODE_EXT_TX_SEQ_VALID) {
-			memcpy(sec->param.encrypt_key.pn, (t_u8 *) ext->tx_seq,
+			memcpy(sec->param.encrypt_key.pn, (t_u8 *)ext->tx_seq,
 			       SEQ_MAX_SIZE);
 			DBG_HEXDUMP(MCMD_D, "Uap Tx PN",
 				    sec->param.encrypt_key.pn, SEQ_MAX_SIZE);
@@ -1042,7 +1043,7 @@ woal_set_mlme(struct net_device *dev,
 	      struct iw_request_info *info, struct iw_point *dwrq, char *extra)
 {
 	struct iw_mlme *mlme = (struct iw_mlme *)extra;
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_ds_bss *bss = NULL;
 	mlan_ds_get_info *pinfo = NULL;
 	mlan_ioctl_req *req = NULL;
@@ -1056,7 +1057,7 @@ woal_set_mlme(struct net_device *dev,
 
 	memset(sta_addr, 0, ETH_ALEN);
 	if ((mlme->cmd == IW_MLME_DEAUTH) || (mlme->cmd == IW_MLME_DISASSOC)) {
-		memcpy(sta_addr, (t_u8 *) mlme->addr.sa_data, ETH_ALEN);
+		memcpy(sta_addr, (t_u8 *)mlme->addr.sa_data, ETH_ALEN);
 		PRINTM(MIOCTL,
 		       "Deauth station: " MACSTR ", reason=%d\n",
 		       MAC2STR(sta_addr), mlme->reason_code);
@@ -1073,7 +1074,7 @@ woal_set_mlme(struct net_device *dev,
 				LEAVE();
 				return -ENOMEM;
 			}
-			pinfo = (mlan_ds_get_info *) req->pbuf;
+			pinfo = (mlan_ds_get_info *)req->pbuf;
 			pinfo->sub_command = MLAN_OID_UAP_STA_LIST;
 			req->req_id = MLAN_IOCTL_GET_INFO;
 			req->action = MLAN_ACT_GET;
@@ -1083,7 +1084,6 @@ woal_set_mlme(struct net_device *dev,
 				goto done;
 			}
 			sta_list =
-				(mlan_ds_sta_list *)
 				kmalloc(sizeof(mlan_ds_sta_list), GFP_KERNEL);
 			if (sta_list == NULL) {
 				PRINTM(MERROR, "Memory allocation failed!\n");
@@ -1100,7 +1100,7 @@ woal_set_mlme(struct net_device *dev,
 			ret = -ENOMEM;
 			goto done;
 		}
-		bss = (mlan_ds_bss *) req->pbuf;
+		bss = (mlan_ds_bss *)req->pbuf;
 		bss->sub_command = MLAN_OID_UAP_DEAUTH_STA;
 		req->req_id = MLAN_IOCTL_BSS;
 		req->action = MLAN_ACT_SET;
@@ -1154,7 +1154,7 @@ woal_set_auth(struct net_device *dev, struct iw_request_info *info,
 	      struct iw_param *vwrq, char *extra)
 {
 	int ret = 0;
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param sys_cfg;
 
 	ENTER();
@@ -1324,7 +1324,7 @@ static int
 woal_get_auth(struct net_device *dev, struct iw_request_info *info,
 	      struct iw_param *vwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param ap_cfg;
 
 	ENTER();
@@ -1419,7 +1419,7 @@ static int
 woal_get_range(struct net_device *dev, struct iw_request_info *info,
 	       struct iw_point *dwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param ap_cfg;
 	struct iw_range *range = (struct iw_range *)extra;
 	t_u8 band = 0;
@@ -1573,7 +1573,7 @@ static int
 woal_set_essid(struct net_device *dev, struct iw_request_info *info,
 	       struct iw_point *dwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param sys_cfg;
 	int ret = 0;
 
@@ -1636,7 +1636,7 @@ static int
 woal_get_essid(struct net_device *dev, struct iw_request_info *info,
 	       struct iw_point *dwrq, char *extra)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	mlan_uap_bss_param ap_cfg;
 
 	ENTER();
@@ -1782,7 +1782,7 @@ get_wireless_stats:woal_get_uap_wireless_stats,
 struct iw_statistics *
 woal_get_uap_wireless_stats(struct net_device *dev)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	t_u16 wait_option = MOAL_NO_WAIT;
 
 	ENTER();

@@ -44,9 +44,7 @@ static void arch_reset(char mode, const char *cmd)
 
 static void __init berlin_wdt_restart(void)
 {
-#if (BERLIN_CHIP_VERSION == BERLIN_BG2CD_A0)
 	arm_pm_restart = arch_reset;
-#endif
 }
 
 void __init berlin2cd_reset(void)

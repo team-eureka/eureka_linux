@@ -27,7 +27,7 @@ Change log:
 #define _MLAN_DECL_H_
 
 /** MLAN release version */
-#define MLAN_RELEASE_VERSION		"481.P2"
+#define MLAN_RELEASE_VERSION		"481.P3"
 
 /** Re-define generic data types for MLAN/MOAL */
 /** Signed char (1-byte) */
@@ -233,12 +233,6 @@ typedef t_u8 mlan_802_11_mac_addr[MLAN_MAC_ADDR_LENGTH];
 #define MLAN_TX_RETRY_MIN		(0)
 /** Maximum tx retry count */
 #define MLAN_TX_RETRY_MAX		(14)
-
-
-#define RX_RATE_MAX			24
-#define SNR_MAX				256
-#define NOISE_FLR_MAX			256
-#define SIG_STRENGTH_MAX		256
 
 /** define SDIO block size for data Tx/Rx */
 /* We support up to 480-byte block size due to FW buffer limitation. */
@@ -1055,6 +1049,15 @@ typedef struct _mlan_callbacks {
     /** moal_tcp_ack_tx_ind */
 	 t_void(*moal_tcp_ack_tx_ind) (IN t_void * pmoal_handle,
 				       IN pmlan_buffer pmbuf);
+    /** moal_hist_data_add */
+t_void (*moal_hist_data_add) (
+    IN t_void *pmoal_handle,
+    IN t_u32 bss_index,
+    IN t_u8 rx_rate,
+    IN t_s8 snr,
+    IN t_s8 nflr,
+    IN t_u8 antenna
+    );
 } mlan_callbacks, *pmlan_callbacks;
 
 /** Interrupt Mode SDIO */
@@ -1171,14 +1174,6 @@ typedef int (*MOAL_PEER_MGMT_FRAME_CB) ( t_s8 snr,
                                       t_s8 nf,
 			              t_s8 sig_str,
 			              mlan_802_11_mac_addr mac);
-
-/** api to get the histogram data */
-MLAN_API int mlan_hist_data_get(
-    OUT char *pBuf,
-    OUT unsigned int *pNumSamples);
-
-/** api to clear existing histogram data */
-MLAN_API int mlan_hist_data_clear(void);
 
 /** memcpy implementation for mlan */
 MLAN_API void* mlan_memcpy(

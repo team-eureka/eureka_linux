@@ -1,0 +1,5 @@
+config SND_SOC_BERLIN
+        tristate "SoC Audio for the BERLIN chip"
+        select SND_ARM
+        select SND_BERLIN_LIB
+        select SND_HWDEP

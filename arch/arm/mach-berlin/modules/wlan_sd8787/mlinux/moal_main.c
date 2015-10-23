@@ -207,6 +207,7 @@ static mlan_callbacks woal_callbacks = {
 	.moal_print_netintf = moal_print_netintf,
 	.moal_assert = moal_assert,
 	.moal_tcp_ack_tx_ind = moal_tcp_ack_tx_ind,
+        .moal_hist_data_add = moal_hist_data_add,
 };
 
 #if defined(STA_SUPPORT) && defined(UAP_SUPPORT)
@@ -1701,11 +1702,11 @@ woal_init_fw_dpc(moal_handle * handle)
 		sdio_release_host(((struct sdio_mmc_card *)handle->card)->func);
 #endif
 		if (ret == MLAN_STATUS_FAILURE) {
-			PRINTM(MERROR, "WLAN: Download FW with nowwait: %d\n",
+			printk("WLAN: Download FW with nowwait: %d\n",
 			       req_fw_nowait);
 			goto done;
 		}
-		PRINTM(MMSG, "WLAN FW is active\n");
+		printk("WLAN FW is active\n");
 	}
 
 	/** Cal data request */
@@ -1854,6 +1855,7 @@ woal_request_fw(moal_handle * handle)
 	int err;
 
 	ENTER();
+	printk("%s():fw_name=%s request_fw=%d",__FUNCTION__,handle->drv_mode.fw_name,req_fw_nowait);
 
 	if (req_fw_nowait) {
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
@@ -2171,7 +2173,7 @@ woal_add_interface(moal_handle * handle, t_u8 bss_index, t_u8 bss_type)
 	struct net_device *dev = NULL;
 	moal_private *priv = NULL;
 	char name[256];
-
+        int i = 0;
 	ENTER();
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 29)
@@ -2339,6 +2341,12 @@ woal_add_interface(moal_handle * handle, t_u8 bss_index, t_u8 bss_type)
 		}
 		memcpy(dev->dev_addr, priv->current_addr, ETH_ALEN);
 	}
+    if(bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP){
+        for(i = 0; i < handle->histogram_table_num; i++)
+            priv->hist_data[i] = kmalloc(sizeof(hgm_data), GFP_KERNEL);
+		if(priv->hist_data)
+			woal_hist_data_reset(priv);
+	}
 #ifdef CONFIG_PROC_FS
 	woal_create_proc_entry(priv);
 #ifdef PROC_DEBUG
@@ -2377,7 +2385,7 @@ woal_remove_interface(moal_handle * handle, t_u8 bss_index)
 	struct net_device *dev = NULL;
 	moal_private *priv = handle->priv[bss_index];
 	union iwreq_data wrqu;
-
+        int i = 0;
 	ENTER();
 	if (!priv || !priv->netdev)
 		goto error;
@@ -2395,6 +2403,12 @@ woal_remove_interface(moal_handle * handle, t_u8 bss_index)
 	}
 	woal_flush_tcp_sess_queue(priv);
 
+    if(priv->bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP){
+        for(i = 0; i < handle->histogram_table_num; i++){
+           kfree(priv->hist_data[i]);
+	   priv->hist_data[i] = NULL;
+        }
+    }
 #ifdef CONFIG_PROC_FS
 #ifdef PROC_DEBUG
 	/* Remove proc debug */
@@ -4249,6 +4263,8 @@ woal_send_disconnect_to_system(moal_private * priv)
 	if (netif_carrier_ok(priv->netdev))
 		netif_carrier_off(priv->netdev);
 	woal_flush_tcp_sess_queue(priv);
+    if(priv->bss_type == MLAN_BSS_TYPE_STA && priv->hist_data)
+        woal_hist_data_reset(priv);
 	if (IS_STA_WEXT(cfg80211_wext)) {
 		memset(wrqu.ap_addr.sa_data, 0x00, ETH_ALEN);
 		wrqu.ap_addr.sa_family = ARPHRD_ETHER;
@@ -5478,6 +5494,7 @@ woal_add_card(void *card)
 		}
 	}
 
+    handle->histogram_table_num = 1;
 	((struct sdio_mmc_card *)card)->handle = handle;
 
 #ifdef STA_SUPPORT

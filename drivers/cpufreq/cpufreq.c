@@ -582,6 +582,41 @@ static ssize_t show_scaling_setspeed(struct cpufreq_policy *policy, char *buf)
 	return policy->governor->show_setspeed(policy, buf);
 }
 
+static ssize_t show_scaling_cur_mvolt(struct cpufreq_policy *policy, char *buf)
+{
+	unsigned int mv = 0;
+	__cpu_get_mv(policy,&mv);
+	return sprintf(buf, "core voltage = %dmV\n",mv);
+}
+
+static ssize_t show_scaling_boost(struct cpufreq_policy *policy, char *buf)
+{
+	unsigned int boost = 0;
+	__cpu_get_boost(policy,&boost);
+	return sprintf(buf, " 0=-25mV 1=normal 2=+25mV  current = %d\n\n",boost);
+}
+
+
+static ssize_t store_scaling_boost(struct cpufreq_policy *policy,
+					const char *buf, size_t count)
+{
+	unsigned int boost = 0;
+	unsigned int ret;
+
+	if (!policy->governor)
+		return -EINVAL;
+
+	ret = sscanf(buf, "%u", &boost);
+	if (ret != 1)
+		return -EINVAL;
+
+	__cpu_set_boost(policy, boost);
+
+	return count;
+}
+
+
+
 /**
  * show_bios_limit - show the current cpufreq HW/BIOS limitation
  */
@@ -611,6 +646,8 @@ cpufreq_freq_attr_rw(scaling_min_freq);
 cpufreq_freq_attr_rw(scaling_max_freq);
 cpufreq_freq_attr_rw(scaling_governor);
 cpufreq_freq_attr_rw(scaling_setspeed);
+cpufreq_freq_attr_ro(scaling_cur_mvolt);
+cpufreq_freq_attr_rw(scaling_boost);
 
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
@@ -624,6 +661,8 @@ static struct attribute *default_attrs[] = {
 	&scaling_driver.attr,
 	&scaling_available_governors.attr,
 	&scaling_setspeed.attr,
+	&scaling_cur_mvolt.attr,
+	&scaling_boost.attr,
 	NULL
 };
 

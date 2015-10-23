@@ -1,0 +1,57 @@
+/*
+ * Google Hendrix BG2CDP A0 board device tree source
+ *
+ * Copyright (c) 2013 Marvell International Ltd.
+ *		http://www.marvell.com
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+/dts-v1/;
+/include/ "berlin2cdp-a0.dtsi"
+
+/ {
+	model = "Google Hendrix BG2CDP A0 board based on BERLIN2CDP-A0";
+	compatible = "marvell,berlin2cdp-hendrix", "marvell,berlin2cdp", "marvell,berlin";
+
+	cpus {
+		cpu@0 {
+			cpu0-supply = <&vcpu>;
+		};
+	};
+
+	memory {
+		name = "memory";
+		device_type = "memory";
+		reg = <0x01100000 0x0DD00000>;
+	};
+
+	soc {
+		shm@29000000 {
+			compatible = "mrvl,berlin-shm";
+			reg = <0x0EE00000 0x01000000>, <0x0FE00000 0x00100000>;
+		};
+
+		i2c@0 {
+			pg868 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "marvell,pg86x";
+				reg = <0x19>;
+				vcpu:BK1_TV@0 {
+					regulator-name = "vcpu";
+					regulator-min-microvolt = <1000000>;
+					regulator-max-microvolt = <1350000>;
+					regulator-always-on;
+					regulator-boot-on;
+				};
+			};
+		};
+
+		tsen@F7FCD000 {
+			pwr-gpio = <&banka 10 0>;
+		};
+	};
+};

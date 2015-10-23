@@ -48,4 +48,4 @@ static struct clk _name##_clk = {			\
 		.dev_id		= d,			\
 	}
 
-extern void __init berlin_clk_init(void);
+void __init berlin_clk_init(void);

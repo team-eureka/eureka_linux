@@ -1,6 +1,6 @@
-/******************************************************************************* 
-* Copyright (C) Marvell International Ltd. and its affiliates 
-* 
+/*******************************************************************************
+* Copyright (C) Marvell International Ltd. and its affiliates
+*
  * Marvell GPL License Option
  *
  * If you received this File from Marvell, you may opt to use, redistribute and/or
@@ -28,10 +28,12 @@ pMV_CC_DSP_t pMV_APP_DSS = NULL;
 
 MV_CC_ServiceID_U32_t MV_CC_DSS_GetDynamicSID(pMV_CC_DSP_t self)
 {
+	MV_CC_ServiceID_U32_t allocate_SID;
+
 	if (self == NULL)
 		return MV_CC_ServiceID_None;
 
-	MV_OSAL_Mutex_Lock(self->m_SeqIDMutex);
+	mutex_lock(&self->m_SeqIDMutex);
 
 	self->m_SeqID++;
 	self->m_Status.m_SeqID = self->m_SeqID;
@@ -39,10 +41,11 @@ MV_CC_ServiceID_U32_t MV_CC_DSS_GetDynamicSID(pMV_CC_DSP_t self)
 	if (!(self->m_SeqID & MV_CC_SID_BIT_DYNAMIC))
 		MV_CC_DBG_Warning(E_OUTOFRANGE, \
 		"MV_CC_DSS_GetDynamicSID rolled !!!", NULL);
+	allocate_SID = self->m_SeqID;
 
-	MV_OSAL_Mutex_Unlock(self->m_SeqIDMutex);
+	mutex_unlock(&self->m_SeqIDMutex);
 
-	return (self->m_SeqID | MV_CC_SID_BIT_DYNAMIC
+	return (allocate_SID | MV_CC_SID_BIT_DYNAMIC
 		| MV_CC_SID_BIT_NORMAL | MV_CC_SID_BIT_LOCAL);
 }
 
@@ -60,10 +63,10 @@ HRESULT MV_CC_DSS_Init(void)
 
 	pMV_APP_DSS->m_SeqID = MV_CC_ServiceID_DynamicStart;
 
-	MV_OSAL_Mutex_Create(&(pMV_APP_DSS->m_SeqIDMutex));
-	MV_OSAL_Mutex_Create(&(pMV_APP_DSS->m_hGSListMutex));
+	mutex_init(&(pMV_APP_DSS->m_SeqIDMutex));
+	mutex_init(&(pMV_APP_DSS->m_hGSListMutex));
 
-	MV_OSAL_Mutex_Lock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_lock(&pMV_APP_DSS->m_hGSListMutex);
 
 	res = MV_CC_DSS_GlobalServiceList_Init();
 	if (res != S_OK)
@@ -82,7 +85,7 @@ HRESULT MV_CC_DSS_Init(void)
 	pMV_APP_DSS->m_Status.m_LastServiceID = 0;
 	pMV_APP_DSS->m_Status.m_SeqID = pMV_APP_DSS->m_SeqID;
 
-	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_unlock(&pMV_APP_DSS->m_hGSListMutex);
 
 	return S_OK;
 }
@@ -94,17 +97,14 @@ HRESULT MV_CC_DSS_Exit(void)
 	if (pMV_APP_DSS == NULL)
 		MV_CC_DBG_Error(E_NOTREADY, "MV_CC_DSS_Exit", NULL);
 
-	MV_OSAL_Mutex_Lock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_lock(&pMV_APP_DSS->m_hGSListMutex);
 
 	res = MV_CC_DSS_GlobalServiceList_Exit();
 	if (res != S_OK)
 		MV_CC_DBG_Error(res, "MV_CC_DSS_Exit" \
 		" MV_CC_DSS_GlobalServiceList_Exit", NULL);
 
-	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
-
-	MV_OSAL_Mutex_Destroy(&(pMV_APP_DSS->m_hGSListMutex));
-	MV_OSAL_Mutex_Destroy(&(pMV_APP_DSS->m_SeqIDMutex));
+	mutex_unlock(&pMV_APP_DSS->m_hGSListMutex);
 
 	MV_OSAL_Free(pMV_APP_DSS);
 
@@ -277,26 +277,23 @@ HRESULT MV_CC_DSS_Reg(pMV_CC_DSS_ServiceInfo_t pSrvInfo,
 	if (pMV_APP_DSS == NULL)
 		MV_CC_DBG_Error(E_NOTREADY, "MV_CC_DSS_Reg", NULL);
 
-	MV_OSAL_Mutex_Lock(pMV_APP_DSS->m_hGSListMutex);
-
 	// check service id need dynamic generator?
 	if (pSrvInfo->m_ServiceID == MV_CC_ServiceID_DynamicApply) {
 		//get a new dynamic service id
 		pSrvInfo->m_ServiceID = MV_CC_DSS_GetDynamicSID(pMV_APP_DSS);
 		if (pSrvInfo->m_ServiceID == MV_CC_ServiceID_None) {
 			pMV_APP_DSS->m_Status.m_RegErrCount++;
-		 	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
 			MV_CC_DBG_Error(E_FAIL, "MV_CC_DSS_Reg", NULL);
 		}
 	}
 
 	pSrvInfo_copy = MV_CC_DSS_GlobalServiceList_SrvInfo_Ctor();
 	if (pSrvInfo_copy == NULL) {
-		MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
 		MV_CC_DBG_Error(E_OUTOFMEMORY, "MV_CC_DSS_Reg", NULL);
 	}
 	GaloisMemcpy(pSrvInfo_copy, pSrvInfo, sizeof(MV_CC_DSS_ServiceInfo_t));
 
+	mutex_lock(&pMV_APP_DSS->m_hGSListMutex);
 	res = MV_CC_DSS_GlobalServiceList_Add(pSrvInfo->m_ServiceID,
 						pSrvInfo_copy);
 	if (res != S_OK) {
@@ -306,7 +303,8 @@ HRESULT MV_CC_DSS_Reg(pMV_CC_DSS_ServiceInfo_t pSrvInfo,
 		goto MV_CC_DSS_Reg_Failure;
 	}
 
-	singlenode_add(cc_task->serverid_head, pSrvInfo->m_ServiceID);
+	if (cc_task != NULL)
+		singlenode_add(cc_task->serverid_head, pSrvInfo->m_ServiceID);
 
 	pMV_APP_DSS->m_Status.m_RegCount++;
 	pMV_APP_DSS->m_Status.m_ServiceCount++;
@@ -314,7 +312,7 @@ HRESULT MV_CC_DSS_Reg(pMV_CC_DSS_ServiceInfo_t pSrvInfo,
 
 MV_CC_DSS_Reg_Failure:
 
-	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_unlock(&pMV_APP_DSS->m_hGSListMutex);
 
 	return res;
 }
@@ -335,7 +333,7 @@ HRESULT MV_CC_DSS_Update(pMV_CC_DSS_ServiceInfo_t pSrvInfo)
 	if (pSrvInfo->m_ServiceID == MV_CC_ServiceID_DynamicApply)
 		MV_CC_DBG_Error(E_BADVALUE, "MV_CC_DSS_Update", NULL);
 
-	MV_OSAL_Mutex_Lock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_lock(&pMV_APP_DSS->m_hGSListMutex);
 
 	res = MV_CC_DSS_GlobalServiceList_Get(pSrvInfo->m_ServiceID, \
 					&pSrvInfo_Search);
@@ -357,7 +355,7 @@ HRESULT MV_CC_DSS_Update(pMV_CC_DSS_ServiceInfo_t pSrvInfo)
 
 MV_CC_DSS_Update_Failure:
 
-	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_unlock(&pMV_APP_DSS->m_hGSListMutex);
 
 	return res;
 }
@@ -374,9 +372,9 @@ HRESULT MV_CC_DSS_Free(pMV_CC_DSS_ServiceInfo_t pSrvInfo,
 	if (pMV_APP_DSS == NULL)
 		MV_CC_DBG_Error(E_NOTREADY, "MV_CC_DSS_Free", NULL);
 
-	MV_OSAL_Mutex_Lock(pMV_APP_DSS->m_hGSListMutex);
-
-	singlenode_delete(cc_task->serverid_head, pSrvInfo->m_ServiceID);
+	mutex_lock(&pMV_APP_DSS->m_hGSListMutex);
+	if (cc_task != NULL)
+		singlenode_delete(cc_task->serverid_head, pSrvInfo->m_ServiceID);
 
 	res = MV_CC_DSS_GlobalServiceList_Delete(pSrvInfo->m_ServiceID);
 	if (res != S_OK) {
@@ -392,7 +390,7 @@ HRESULT MV_CC_DSS_Free(pMV_CC_DSS_ServiceInfo_t pSrvInfo,
 
 MV_CC_DSS_Free_Failure:
 
-	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_unlock(&pMV_APP_DSS->m_hGSListMutex);
 
 	return res;
 }
@@ -409,7 +407,7 @@ HRESULT MV_CC_DSS_Inquiry(pMV_CC_DSS_ServiceInfo_t pSrvInfo)
 	if (pMV_APP_DSS == NULL)
 		MV_CC_DBG_Error(E_NOTREADY, "MV_CC_DSS_Inquiry", NULL);
 
-	MV_OSAL_Mutex_Lock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_lock(&pMV_APP_DSS->m_hGSListMutex);
 
 	res = MV_CC_DSS_GlobalServiceList_Get(pSrvInfo->m_ServiceID, \
 						&pSrvInfo_Search);
@@ -431,7 +429,7 @@ HRESULT MV_CC_DSS_Inquiry(pMV_CC_DSS_ServiceInfo_t pSrvInfo)
 
 MV_CC_DSS_Inquiry_Failure:
 
-	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_unlock(&pMV_APP_DSS->m_hGSListMutex);
 
 	return res;
 }
@@ -472,7 +470,7 @@ HRESULT MV_CC_DSS_GetList(pMV_CC_DSS_ServiceInfo_DataList_t pSrvInfoList)
 	pSrvInfoList->m_DataNum = 0;
 	pSrvInfoList->m_MaxNum = 0;
 
-	MV_OSAL_Mutex_Lock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_lock(&pMV_APP_DSS->m_hGSListMutex);
 
 	res = MV_CC_DSS_GlobalServiceList_Traversal(GSList_VisitFunc_GetList,
 							pSrvInfoList);
@@ -480,7 +478,7 @@ HRESULT MV_CC_DSS_GetList(pMV_CC_DSS_ServiceInfo_DataList_t pSrvInfoList)
 		MV_CC_DBG_Warning(res, "MV_CC_DSS_GetList" \
 		" MV_CC_DSS_GlobalServiceList_Traversal", NULL);
 
-	MV_OSAL_Mutex_Unlock(pMV_APP_DSS->m_hGSListMutex);
+	mutex_unlock(&pMV_APP_DSS->m_hGSListMutex);
 
 	return res;
 }

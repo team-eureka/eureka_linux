@@ -35,31 +35,15 @@ Change log:
 #include "mlan_main.h"
 #include "mlan_11n_aggr.h"
 #include "mlan_11n_rxreorder.h"
+#ifdef DRV_EMBEDDED_SUPPLICANT
+#include "authenticator_api.h"
+#endif
 
 #include "mlan_decl.h"
-
-static void mlan_hist_data_reset();
-static void mlan_hist_data_set(t_s8 rxRate, t_s8 snr, t_s8 nflr);
-
 
 /********************************************************
 		Local Variables
 ********************************************************/
-
-//Number of samples in histogram (/proc/mwlan/mlan0/histogram).
-#define MLAN_HIST_MAX_SAMPLES   1048576
-
-typedef struct _hgm_data
-{
-	atomic_t rx_rate[RX_RATE_MAX];
-	atomic_t snr[SNR_MAX];
-	atomic_t noise_flr[NOISE_FLR_MAX];
-	atomic_t sig_str[SIG_STRENGTH_MAX];
-	atomic_t num_samples;
-
-} mlan_hgm_data;
-
-static mlan_hgm_data *pmlan_hist = 0;
 
 /** Ethernet II header */
 typedef struct {
@@ -72,96 +56,116 @@ typedef struct {
 
 } EthII_Hdr_t;
 
+/** IPv4 ARP request header */
+typedef MLAN_PACK_START struct {
+    /** Hardware type */
+	t_u16 Htype;
+    /** Protocol type */
+	t_u16 Ptype;
+    /** Hardware address length */
+	t_u8 addr_len;
+    /** Protocol address length */
+	t_u8 proto_len;
+    /** Operation code */
+	t_u16 op_code;
+    /** Source mac address */
+	t_u8 src_mac[MLAN_MAC_ADDR_LENGTH];
+    /** Sender IP address */
+	t_u8 src_ip[4];
+    /** Destination mac address */
+	t_u8 dst_mac[MLAN_MAC_ADDR_LENGTH];
+    /** Destination IP address */
+	t_u8 dst_ip[4];
+} MLAN_PACK_END IPv4_ARP_t;
+
+/** IPv6 Nadv packet header */
+typedef MLAN_PACK_START struct {
+    /** IP protocol version */
+	t_u8 version;
+    /** flow label */
+	t_u8 flow_lab[3];
+    /** Payload length */
+	t_u16 payload_len;
+    /** Next header type */
+	t_u8 next_hdr;
+    /** Hot limit */
+	t_u8 hop_limit;
+    /** Source address */
+	t_u8 src_addr[16];
+    /** Destination address */
+	t_u8 dst_addr[16];
+    /** ICMP type */
+	t_u8 icmp_type;
+    /** IPv6 Code */
+	t_u8 ipv6_code;
+    /** IPv6 Checksum */
+	t_u16 ipv6_checksum;
+    /** Flags */
+	t_u32 flags;
+    /** Target address */
+	t_u8 taget_addr[16];
+    /** Reserved */
+	t_u8 rev[8];
+} MLAN_PACK_END IPv6_Nadv_t;
+
 /********************************************************
 		Global Variables
 ********************************************************/
 
-void* mlan_memcpy(void *pDest, void *pSrc, unsigned int count)
-{
-	char *d = (char *) pDest;
-	char *s = (char *) pSrc;
-	while (count--){
-		*d++ = *s++;
-	}
-return pDest;
-}
-
-int mlan_hist_data_get(char *pBuf, unsigned int *pNumSamples)
-{
-	char *d = pBuf;
-	char *s;
-	unsigned int temp;
-	int ix, dest_ix = 0;
-	if (pmlan_hist)
-	{
-		*pNumSamples = atomic_read(&(pmlan_hist->num_samples));
-		for (ix = 0; ix < RX_RATE_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->rx_rate[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		for (ix = 0; ix < SNR_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->snr[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		for (ix = 0; ix < NOISE_FLR_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->noise_flr[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		for (ix = 0; ix < SIG_STRENGTH_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->sig_str[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		return 0;
-	}
-
-	*pNumSamples = 0;
-	return -1;
-}
-
-int mlan_hist_data_clear()
-{
-	if (pmlan_hist){
-		mlan_hist_data_reset();
-		return 0;
-	}
-	return -1;
-}
-
 /********************************************************
 		Local Functions
 ********************************************************/
-static void mlan_hist_data_reset()
-{
-	int ix;
-
-	atomic_set(&(pmlan_hist->num_samples), 0);
-	for (ix = 0; ix < RX_RATE_MAX; ix++) atomic_set(&(pmlan_hist->rx_rate[ix]), 0);
-	for (ix = 0; ix < SNR_MAX; ix++) atomic_set(&(pmlan_hist->snr[ix]), 0);
-	for (ix = 0; ix < NOISE_FLR_MAX; ix++) atomic_set(&(pmlan_hist->noise_flr[ix]), 0);
-	for (ix = 0; ix < SIG_STRENGTH_MAX; ix++) atomic_set(&(pmlan_hist->sig_str[ix]), 0);
-
-}
-
-static void mlan_hist_data_set(t_s8 rxRate, t_s8 snr, t_s8 nflr)
-{
-	atomic_inc(&(pmlan_hist->num_samples));
-	atomic_inc(&(pmlan_hist->rx_rate[rxRate]));
-	atomic_inc(&(pmlan_hist->snr[snr]));
-	atomic_inc(&(pmlan_hist->noise_flr[128 + nflr]));
-	atomic_inc(&(pmlan_hist->sig_str[nflr - snr]));
-}
 
 /********************************************************
 		Global functions
 ********************************************************/
+/**
+ *  @brief This function check and discard IPv4 and IPv6 gratuitous broadcast packets
+ *
+ *  @param prx_pkt     A pointer to RxPacketHdr_t structure of received packet
+ *  @param pmadapter   A pointer to pmlan_adapter structure
+ *  @return            TRUE if found such type of packets, FALSE not found
+ */
+static t_u8
+discard_gratuitous_ARP_msg(RxPacketHdr_t *prx_pkt, pmlan_adapter pmadapter)
+{
+	t_u8 proto_ARP_type[] = { 0x08, 0x06 };
+	t_u8 proto_ARP_type_v6[] = { 0x86, 0xDD };
+	IPv4_ARP_t *parp_hdr;
+	IPv6_Nadv_t *pNadv_hdr;
+	t_u8 ret = MFALSE;
+
+	/* IPV4 pkt check * A gratuitous ARP is an ARP packet * where the
+	   source and destination IP are both set to * the IP of the machine
+	   issuing the packet. */
+	if (memcmp
+	    (pmadapter, proto_ARP_type, &prx_pkt->eth803_hdr.h803_len,
+	     sizeof(proto_ARP_type)) == 0) {
+		parp_hdr = (IPv4_ARP_t *)(&prx_pkt->rfc1042_hdr);
+		/* Graguitous ARP can be ARP request or ARP reply */
+		if ((parp_hdr->op_code == mlan_htons(0x01)) ||
+		    (parp_hdr->op_code == mlan_htons(0x02)))
+			if (memcmp
+			    (pmadapter, parp_hdr->src_ip, parp_hdr->dst_ip,
+			     4) == 0)
+				ret = MTRUE;
+	}
+
+	/* IPV6 pkt check * An unsolicited Neighbor Advertisement pkt is *
+	   marked by a cleared Solicited Flag */
+	if (memcmp
+	    (pmadapter, proto_ARP_type_v6, &prx_pkt->eth803_hdr.h803_len,
+	     sizeof(proto_ARP_type_v6)) == 0) {
+		pNadv_hdr = (IPv6_Nadv_t *)(&prx_pkt->rfc1042_hdr);
+		/* Check Nadv type: next header is ICMPv6 and icmp type is Nadv
+		 */
+		if (pNadv_hdr->next_hdr == 0x3A && pNadv_hdr->icmp_type == 0x88)
+			if ((pNadv_hdr->flags & mlan_htonl(0x40000000)) == 0)
+				ret = MTRUE;
+	}
+
+	return ret;
+}
 
 /**
  *  @brief This function process tdls action frame
@@ -172,7 +176,7 @@ static void mlan_hist_data_set(t_s8 rxRate, t_s8 snr, t_s8 nflr)
  *  @return            N/A
  */
 void
-wlan_process_tdls_action_frame(pmlan_private priv, t_u8 * pbuf, t_u32 len)
+wlan_process_tdls_action_frame(pmlan_private priv, t_u8 *pbuf, t_u32 len)
 {
 	sta_node *sta_ptr = MNULL;
 	t_u8 *peer;
@@ -188,15 +192,15 @@ wlan_process_tdls_action_frame(pmlan_private priv, t_u8 * pbuf, t_u32 len)
 #define TDLS_CONFIRM_FIX_LEN  6
 	if (len < (sizeof(EthII_Hdr_t) + 3))
 		return;
-	if (*(t_u8 *) (pbuf + sizeof(EthII_Hdr_t)) != TDLS_PAYLOAD_TYPE)
+	if (*(t_u8 *)(pbuf + sizeof(EthII_Hdr_t)) != TDLS_PAYLOAD_TYPE)
 		/* TDLS payload type = 2 */
 		return;
-	if (*(t_u8 *) (pbuf + sizeof(EthII_Hdr_t) + 1) != TDLS_CATEGORY)
+	if (*(t_u8 *)(pbuf + sizeof(EthII_Hdr_t) + 1) != TDLS_CATEGORY)
 		/* TDLS category = 0xc */
 		return;
 	peer = pbuf + MLAN_MAC_ADDR_LENGTH;
 
-	action = *(t_u8 *) (pbuf + sizeof(EthII_Hdr_t) + 2);
+	action = *(t_u8 *)(pbuf + sizeof(EthII_Hdr_t) + 2);
 	/* 2= payload type + category */
 
 	if (action > TDLS_SETUP_CONFIRM) {
@@ -218,7 +222,7 @@ wlan_process_tdls_action_frame(pmlan_private priv, t_u8 * pbuf, t_u32 len)
 			return;
 		pos = pbuf + sizeof(EthII_Hdr_t) + 4;
 		/* payload 1+ category 1 + action 1 +dialog 1 */
-		sta_ptr->capability = mlan_ntohs(*(t_u16 *) pos);
+		sta_ptr->capability = mlan_ntohs(*(t_u16 *)pos);
 		ie_len = len - sizeof(EthII_Hdr_t) - TDLS_REQ_FIX_LEN;
 		pos += 2;
 	} else if (action == 1) {	/* setup respons */
@@ -228,7 +232,7 @@ wlan_process_tdls_action_frame(pmlan_private priv, t_u8 * pbuf, t_u32 len)
 			return;
 		pos = pbuf + sizeof(EthII_Hdr_t) + 6;
 		/* payload 1+ category 1 + action 1 +dialog 1 +status 2 */
-		sta_ptr->capability = mlan_ntohs(*(t_u16 *) pos);
+		sta_ptr->capability = mlan_ntohs(*(t_u16 *)pos);
 		ie_len = len - sizeof(EthII_Hdr_t) - TDLS_RESP_FIX_LEN;
 		pos += 2;
 	} else {		/* setup confirm */
@@ -256,11 +260,11 @@ wlan_process_tdls_action_frame(pmlan_private priv, t_u8 * pbuf, t_u32 len)
 			sta_ptr->rate_len += pos[1];
 			break;
 		case HT_CAPABILITY:
-			memcpy(priv->adapter, (t_u8 *) & sta_ptr->HTcap, pos,
+			memcpy(priv->adapter, (t_u8 *)&sta_ptr->HTcap, pos,
 			       sizeof(IEEEtypes_HTCap_t));
 			sta_ptr->is_11n_enabled = 1;
 			DBG_HEXDUMP(MDAT_D, "TDLS HT capability",
-				    (t_u8 *) (&sta_ptr->HTcap),
+				    (t_u8 *)(&sta_ptr->HTcap),
 				    MIN(sizeof(IEEEtypes_HTCap_t),
 					MAX_DATA_DUMP_LEN));
 			break;
@@ -268,32 +272,37 @@ wlan_process_tdls_action_frame(pmlan_private priv, t_u8 * pbuf, t_u32 len)
 			memcpy(priv->adapter, &sta_ptr->HTInfo, pos,
 			       sizeof(IEEEtypes_HTInfo_t));
 			DBG_HEXDUMP(MDAT_D, "TDLS HT info",
-				    (t_u8 *) (&sta_ptr->HTInfo),
+				    (t_u8 *)(&sta_ptr->HTInfo),
 				    MIN(sizeof(IEEEtypes_HTInfo_t),
 					MAX_DATA_DUMP_LEN));
 			break;
 		case BSSCO_2040:
-			memcpy(priv->adapter, (t_u8 *) & sta_ptr->BSSCO_20_40,
+			memcpy(priv->adapter, (t_u8 *)&sta_ptr->BSSCO_20_40,
 			       pos, sizeof(IEEEtypes_2040BSSCo_t));
 			break;
 		case EXT_CAPABILITY:
-			memcpy(priv->adapter, (t_u8 *) & sta_ptr->ExtCap, pos,
+			memcpy(priv->adapter, (t_u8 *)&sta_ptr->ExtCap, pos,
 			       pos[1] + sizeof(IEEEtypes_Header_t));
 			DBG_HEXDUMP(MDAT_D, "TDLS Extended capability",
-				    (t_u8 *) (&sta_ptr->ExtCap),
+				    (t_u8 *)(&sta_ptr->ExtCap),
 				    sta_ptr->ExtCap.ieee_hdr.len + 2);
 			break;
 		case RSN_IE:
-			memcpy(priv->adapter, (t_u8 *) & sta_ptr->rsn_ie, pos,
+			memcpy(priv->adapter, (t_u8 *)&sta_ptr->rsn_ie, pos,
 			       pos[1] + sizeof(IEEEtypes_Header_t));
 			DBG_HEXDUMP(MDAT_D, "TDLS Rsn ie ",
-				    (t_u8 *) (&sta_ptr->rsn_ie),
+				    (t_u8 *)(&sta_ptr->rsn_ie),
 				    pos[1] + sizeof(IEEEtypes_Header_t));
 			break;
 		case QOS_INFO:
 			sta_ptr->qos_info = pos[2];
 			PRINTM(MDAT_D, "TDLS qos info %x\n", sta_ptr->qos_info);
 			break;
+		case LINK_ID:
+			memcpy(priv->adapter, (t_u8 *)&sta_ptr->link_ie, pos,
+			       sizeof(IEEEtypes_LinkIDElement_t));
+			break;
+
 		default:
 			break;
 		}
@@ -319,19 +328,24 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	RxPD *prx_pd;
 	int hdr_chop;
 	EthII_Hdr_t *peth_hdr;
-	t_u8 rfc1042_eth_hdr[MLAN_MAC_ADDR_LENGTH] =
-		{ 0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00 };
-	t_u8 snap_oui_802_h[MLAN_MAC_ADDR_LENGTH] =
-		{ 0xaa, 0xaa, 0x03, 0x00, 0x00, 0xf8 };
+	t_u8 rfc1042_eth_hdr[MLAN_MAC_ADDR_LENGTH] = {
+		0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00
+	};
+	t_u8 snap_oui_802_h[MLAN_MAC_ADDR_LENGTH] = {
+		0xaa, 0xaa, 0x03, 0x00, 0x00, 0xf8
+	};
 	t_u8 appletalk_aarp_type[2] = { 0x80, 0xf3 };
 	t_u8 ipx_snap_type[2] = { 0x81, 0x37 };
 	t_u8 tdls_action_type[2] = { 0x89, 0x0d };
-    t_u8 adj_rx_rate = 0;
+#ifdef DRV_EMBEDDED_SUPPLICANT
+	t_u8 eapol_type[2] = { 0x88, 0x8e };
+#endif
+	t_u8 adj_rx_rate = 0;
 
 	ENTER();
 
-	prx_pd = (RxPD *) (pmbuf->pbuf + pmbuf->data_offset);
-	prx_pkt = (RxPacketHdr_t *) ((t_u8 *) prx_pd + prx_pd->rx_pkt_offset);
+	prx_pd = (RxPD *)(pmbuf->pbuf + pmbuf->data_offset);
+	prx_pkt = (RxPacketHdr_t *)((t_u8 *)prx_pd + prx_pd->rx_pkt_offset);
 
 /** Small debug type */
 #define DBG_TYPE_SMALL  2
@@ -339,11 +353,11 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 #define SIZE_OF_DBG_STRUCT 4
 	if (prx_pd->rx_pkt_type == PKT_TYPE_DEBUG) {
 		t_u8 dbg_type;
-		dbg_type = *(t_u8 *) & prx_pkt->eth803_hdr;
+		dbg_type = *(t_u8 *)&prx_pkt->eth803_hdr;
 		if (dbg_type == DBG_TYPE_SMALL) {
 			PRINTM(MFW_D, "\n");
 			DBG_HEXDUMP(MFW_D, "FWDBG",
-				    (char *)((t_u8 *) & prx_pkt->eth803_hdr +
+				    (char *)((t_u8 *)&prx_pkt->eth803_hdr +
 					     SIZE_OF_DBG_STRUCT),
 				    prx_pd->rx_pkt_length);
 			PRINTM(MFW_D, "FWDBG::\n");
@@ -370,15 +384,15 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	     memcmp(pmadapter, &prx_pkt->rfc1042_hdr.snap_type,
 		    ipx_snap_type, sizeof(ipx_snap_type)))) {
 		/*
-		 *  Replace the 803 header and rfc1042 header (llc/snap) with an
-		 *    EthernetII header, keep the src/dst and snap_type (ethertype).
-		 *  The firmware only passes up SNAP frames converting
-		 *    all RX Data from 802.11 to 802.2/LLC/SNAP frames.
-		 *  To create the Ethernet II, just move the src, dst address right
-		 *    before the snap_type.
+		 * Replace the 803 header and rfc1042 header (llc/snap) with an
+		 * EthernetII header, keep the src/dst and snap_type (ethertype).
+		 * The firmware only passes up SNAP frames converting
+		 * all RX Data from 802.11 to 802.2/LLC/SNAP frames.
+		 * To create the Ethernet II, just move the src, dst address
+		 * right before the snap_type.
 		 */
 		peth_hdr = (EthII_Hdr_t *)
-			((t_u8 *) & prx_pkt->eth803_hdr
+			((t_u8 *)&prx_pkt->eth803_hdr
 			 + sizeof(prx_pkt->eth803_hdr) +
 			 sizeof(prx_pkt->rfc1042_hdr)
 			 - sizeof(prx_pkt->eth803_hdr.dest_addr)
@@ -394,23 +408,27 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 
 		/* Chop off the RxPD + the excess memory from the
 		   802.2/llc/snap header that was removed. */
-		hdr_chop = (t_u32) ((t_ptr) peth_hdr - (t_ptr) prx_pd);
+		hdr_chop = (t_u32)((t_ptr)peth_hdr - (t_ptr)prx_pd);
 	} else {
 		HEXDUMP("RX Data: LLC/SNAP",
-			(t_u8 *) & prx_pkt->rfc1042_hdr,
+			(t_u8 *)&prx_pkt->rfc1042_hdr,
 			sizeof(prx_pkt->rfc1042_hdr));
-		if (!memcmp
-		    (pmadapter, &prx_pkt->eth803_hdr.h803_len, tdls_action_type,
-		     sizeof(tdls_action_type))) {
+		if ((priv->hotspot_cfg & HOTSPOT_ENABLED) &&
+		    discard_gratuitous_ARP_msg(prx_pkt, pmadapter)) {
+			ret = MLAN_STATUS_SUCCESS;
+			PRINTM(MDATA,
+			       "Bypass sending Gratuitous ARP frame to Kernel.\n");
+			goto done;
+		}
+		if (!memcmp(pmadapter, &prx_pkt->eth803_hdr.h803_len,
+			    tdls_action_type, sizeof(tdls_action_type))) {
 			wlan_process_tdls_action_frame(priv,
-						       ((t_u8 *) prx_pd +
+						       ((t_u8 *)prx_pd +
 							prx_pd->rx_pkt_offset),
 						       prx_pd->rx_pkt_length);
 		}
 		/* Chop off the RxPD */
-		hdr_chop =
-			(t_u32) ((t_ptr) & prx_pkt->eth803_hdr -
-				 (t_ptr) prx_pd);
+		hdr_chop = (t_u32)((t_ptr)&prx_pkt->eth803_hdr - (t_ptr)prx_pd);
 	}
 
 	/* Chop off the leading header bytes so the it points to the start of
@@ -419,45 +437,24 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	pmbuf->data_offset += hdr_chop;
 	pmbuf->pparent = MNULL;
 
-	DBG_HEXDUMP(MDAT_D, "RxPD", (t_u8 *) prx_pd,
+	DBG_HEXDUMP(MDAT_D, "RxPD", (t_u8 *)prx_pd,
 		    MIN(sizeof(RxPD), MAX_DATA_DUMP_LEN));
 	DBG_HEXDUMP(MDAT_D, "Rx Payload",
-		    ((t_u8 *) prx_pd + prx_pd->rx_pkt_offset),
+		    ((t_u8 *)prx_pd + prx_pd->rx_pkt_offset),
 		    MIN(prx_pd->rx_pkt_length, MAX_DATA_DUMP_LEN));
 	priv->rxpd_rate = prx_pd->rx_rate;
 	priv->rxpd_htinfo = prx_pd->ht_info;
-
-    if (priv->rxpd_htinfo & MBIT(0)){ //Check for 11n HT20 rates
-        adj_rx_rate = priv->rxpd_rate + MLAN_RATE_INDEX_MCS0;
-        PRINTM(MDATA,"wlan_process_rx_packet(): HT20 Rate! ht_info:%x Rx Rate:%d adj_rate:%d\n",
-                priv->rxpd_htinfo,priv->rxpd_rate,adj_rx_rate);
-    }
-    else { //BG rates
-        adj_rx_rate = (priv->rxpd_rate > MLAN_RATE_INDEX_OFDM0) ? priv->rxpd_rate - 1 : priv->rxpd_rate;
-        PRINTM(MDATA,"wlan_process_rx_packet(): HT20 Rate! ht_info:%x Rx Rate:%d adj_rate:%d\n",
-                priv->rxpd_htinfo,priv->rxpd_rate,adj_rx_rate);
-    }
-
-    if (pmlan_hist)
-    {
-        unsigned long curr_size;
-        curr_size = atomic_read(&(pmlan_hist->num_samples));
-        if (curr_size > MLAN_HIST_MAX_SAMPLES)
-        {
-            mlan_hist_data_reset();
-        }
-
-        mlan_hist_data_set( adj_rx_rate, prx_pd->snr, prx_pd->nf);
-    }
-    else
-    {
-        pmlan_hist = (mlan_hgm_data *) kmalloc(sizeof(mlan_hgm_data),GFP_KERNEL);
-
-        if (pmlan_hist){
-            mlan_hist_data_reset();
-            mlan_hist_data_set( adj_rx_rate, prx_pd->snr, prx_pd->nf);
-        }
-    }
+	if (priv->bss_type == MLAN_BSS_TYPE_STA) {
+		adj_rx_rate =
+			wlan_adjust_data_rate(priv, priv->rxpd_rate,
+					      priv->rxpd_htinfo);
+		pmadapter->callbacks.moal_hist_data_add(pmadapter->pmoal_handle,
+							pmbuf->bss_index,
+							adj_rx_rate,
+							prx_pd->snr,
+							prx_pd->nf,
+							prx_pd->antenna);
+	}
 
 	pmadapter->callbacks.moal_get_system_time(pmadapter->pmoal_handle,
 						  &pmbuf->out_ts_sec,
@@ -466,6 +463,25 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	PRINTM(MDATA, "%lu.%06lu : Data => kernel seq_num=%d tid=%d\n",
 	       pmbuf->out_ts_sec, pmbuf->out_ts_usec, prx_pd->seq_num,
 	       prx_pd->priority);
+
+#ifdef DRV_EMBEDDED_SUPPLICANT
+	if (priv->adapter->psdio_device->driver_supplicant_auth &&
+	    supplicantIsEnabled(priv->psapriv) &&
+	    (!memcmp
+	     (pmadapter, &prx_pkt->eth803_hdr.h803_len, eapol_type,
+	      sizeof(eapol_type)))) {
+		// BML_SET_OFFSET(bufDesc, offset);
+		if (ProcessEAPoLPkt(priv->psapriv, pmbuf)) {
+			wlan_free_mlan_buffer(pmadapter, pmbuf);
+			ret = MLAN_STATUS_SUCCESS;
+			PRINTM(MMSG,
+			       "host supplicant eapol pkt process done.\n");
+
+			LEAVE();
+			return ret;
+		}
+	}
+#endif
 
 	ret = pmadapter->callbacks.moal_recv_packet(pmadapter->pmoal_handle,
 						    pmbuf);
@@ -502,7 +518,7 @@ int mlan_register_peer_mac_cb(MOAL_PEER_MGMT_FRAME_CB fn)
 
 mlan_status wlan_sta_check_mgmt_frame(mlan_private *priv, t_u8 *payload, t_u32 payload_len, RxPD *prxpd)
 {
-	
+
 	pmlan_adapter pmadapter = priv->adapter;
 	pmlan_callbacks pcb = &pmadapter->callbacks;
 	mlan_status ret = MLAN_STATUS_SUCCESS;
@@ -528,9 +544,12 @@ mlan_status wlan_sta_check_mgmt_frame(mlan_private *priv, t_u8 *payload, t_u32 p
 			PRINTM(MINFO,"PRB_REQ:snr:%d,nf:%d,mac:%02x:%02x:%02x:%02x:%02x:%02x fromDS:%d\n",
 				snr,nf,ph->addr2[0],ph->addr2[1],ph->addr2[2],
 				ph->addr2[3],ph->addr2[4],ph->addr2[5],fromDS);
-			if ((0 == fromDS) && (moal_peer_mgmt_frame_callback))	{
+			if ((0 == fromDS) && (moal_peer_mgmt_frame_callback) &&
+					(priv->bss_type == MLAN_BSS_TYPE_STA)) {
 				/* OK, add this to peer list*/
-				moal_peer_mgmt_frame_callback(snr, nf, sig_st, ph->addr2);
+				//moal_peer_mgmt_frame_callback(snr, nf, sig_st, ph->addr2);
+				pmadapter->callbacks.moal_peer_mgmt_frame(pmadapter->pmoal_handle,
+						priv->bss_index, snr, nf, sig_st, ph->addr2);
 			}
 			else
 				PRINTM(MERROR,"peer callback function not registered!\n");
@@ -560,9 +579,9 @@ mlan_status wlan_sta_check_mgmt_frame(mlan_private *priv, t_u8 *payload, t_u32 p
  *   @return        MLAN_STATUS_SUCCESS or MLAN_STATUS_FAILURE
  */
 mlan_status
-wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
+wlan_ops_sta_process_rx_packet(IN t_void *adapter, IN pmlan_buffer pmbuf)
 {
-	pmlan_adapter pmadapter = (pmlan_adapter) adapter;
+	pmlan_adapter pmadapter = (pmlan_adapter)adapter;
 	mlan_status ret = MLAN_STATUS_SUCCESS;
 	RxPD *prx_pd;
 	RxPacketHdr_t *prx_pkt;
@@ -573,14 +592,14 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 	sta_node *sta_ptr = MNULL;
 	ENTER();
 
-	prx_pd = (RxPD *) (pmbuf->pbuf + pmbuf->data_offset);
+	prx_pd = (RxPD *)(pmbuf->pbuf + pmbuf->data_offset);
 	/* Endian conversion */
 	endian_convert_RxPD(prx_pd);
 	rx_pkt_type = prx_pd->rx_pkt_type;
-	prx_pkt = (RxPacketHdr_t *) ((t_u8 *) prx_pd + prx_pd->rx_pkt_offset);
+	prx_pkt = (RxPacketHdr_t *)((t_u8 *)prx_pd + prx_pd->rx_pkt_offset);
 
 	if ((prx_pd->rx_pkt_offset + prx_pd->rx_pkt_length) >
-	    (t_u16) pmbuf->data_len) {
+	    (t_u16)pmbuf->data_len) {
 		PRINTM(MERROR,
 		       "Wrong rx packet: len=%d,rx_pkt_offset=%d,"
 		       " rx_pkt_length=%d\n", pmbuf->data_len,
@@ -597,8 +616,8 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 		/* Check if this is mgmt packet and needs to forwarded to app
 		   as an event */
 		pmgmt_pkt_hdr =
-			(wlan_mgmt_pkt *) ((t_u8 *) prx_pd +
-					   prx_pd->rx_pkt_offset);
+			(wlan_mgmt_pkt *)((t_u8 *)prx_pd +
+					  prx_pd->rx_pkt_offset);
 		pmgmt_pkt_hdr->frm_len =
 			wlan_le16_to_cpu(pmgmt_pkt_hdr->frm_len);
 
@@ -606,15 +625,14 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 		     & IEEE80211_FC_MGMT_FRAME_TYPE_MASK) == 0){
 			wlan_process_802dot11_mgmt_pkt(pmadapter->
 						       priv[pmbuf->bss_index],
-						       (t_u8 *) &
-						       pmgmt_pkt_hdr->
+						       (t_u8 *)&pmgmt_pkt_hdr->
 						       wlan_header,
 						       pmgmt_pkt_hdr->frm_len +
 						       sizeof(wlan_mgmt_pkt)
 						       -
 						       sizeof(pmgmt_pkt_hdr->
-							      frm_len));
-			
+							      frm_len),prx_pd);
+
 			wlan_sta_check_mgmt_frame(pmadapter->priv[pmbuf->bss_index],
 						  (t_u8 *) &pmgmt_pkt_hdr->wlan_header,
 						  pmgmt_pkt_hdr->frm_len +
@@ -652,6 +670,13 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 					prx_pd->seq_num;
 				sta_ptr->snr = prx_pd->snr;
 				sta_ptr->nf = prx_pd->nf;
+				pmadapter->callbacks.
+					moal_updata_peer_signal(pmadapter->
+								pmoal_handle,
+								pmbuf->
+								bss_index, ta,
+								prx_pd->snr,
+								prx_pd->nf);
 			}
 		}
 	} else {
@@ -666,8 +691,8 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 	if ((priv->port_ctrl_mode == MTRUE && priv->port_open == MFALSE) &&
 	    (rx_pkt_type != PKT_TYPE_BAR)) {
 		mlan_11n_rxreorder_pkt(priv, prx_pd->seq_num, prx_pd->priority,
-				       ta, (t_u8) prx_pd->rx_pkt_type,
-				       (t_void *) RX_PKT_DROPPED_IN_FW);
+				       ta, (t_u8)prx_pd->rx_pkt_type,
+				       (t_void *)RX_PKT_DROPPED_IN_FW);
 		wlan_process_rx_packet(pmadapter, pmbuf);
 		goto done;
 	}
@@ -675,7 +700,7 @@ wlan_ops_sta_process_rx_packet(IN t_void * adapter, IN pmlan_buffer pmbuf)
 	/* Reorder and send to OS */
 	ret = mlan_11n_rxreorder_pkt(priv, prx_pd->seq_num,
 				     prx_pd->priority, ta,
-				     (t_u8) prx_pd->rx_pkt_type, (void *)pmbuf);
+				     (t_u8)prx_pd->rx_pkt_type, (void *)pmbuf);
 	if (ret || (rx_pkt_type == PKT_TYPE_BAR)
 		) {
 		wlan_free_mlan_buffer(pmadapter, pmbuf);

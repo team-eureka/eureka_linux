@@ -69,7 +69,7 @@ wlan_handle_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 
 	ENTER();
 
-	prx_pd = (RxPD *) (pmbuf->pbuf + pmbuf->data_offset);
+	prx_pd = (RxPD *)(pmbuf->pbuf + pmbuf->data_offset);
 	/* Get the BSS number from RxPD, get corresponding priv */
 	priv = wlan_get_priv_by_id(pmadapter, prx_pd->bss_num & BSS_NUM_MASK,
 				   prx_pd->bss_type);
@@ -95,8 +95,7 @@ wlan_handle_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
  *  @return         MLAN_STATUS_SUCCESS/MLAN_STATUS_PENDING --success, otherwise failure
  */
 mlan_status
-wlan_process_tx(pmlan_private priv, pmlan_buffer pmbuf,
-		mlan_tx_param * tx_param)
+wlan_process_tx(pmlan_private priv, pmlan_buffer pmbuf, mlan_tx_param *tx_param)
 {
 	mlan_status ret = MLAN_STATUS_SUCCESS;
 	pmlan_adapter pmadapter = priv->adapter;
@@ -109,7 +108,7 @@ wlan_process_tx(pmlan_private priv, pmlan_buffer pmbuf,
 #endif
 
 	ENTER();
-	head_ptr = (t_u8 *) priv->ops.process_txpd(priv, pmbuf);
+	head_ptr = (t_u8 *)priv->ops.process_txpd(priv, pmbuf);
 	if (!head_ptr) {
 		pmbuf->status_code = MLAN_ERROR_PKT_INVALID;
 		ret = MLAN_STATUS_FAILURE;
@@ -117,7 +116,7 @@ wlan_process_tx(pmlan_private priv, pmlan_buffer pmbuf,
 	}
 #ifdef STA_SUPPORT
 	if (GET_BSS_ROLE(priv) == MLAN_BSS_ROLE_STA)
-		plocal_tx_pd = (TxPD *) (head_ptr + INTF_HEADER_LEN);
+		plocal_tx_pd = (TxPD *)(head_ptr + INTF_HEADER_LEN);
 #endif
 	ret = wlan_sdio_host_to_card(pmadapter, MLAN_TYPE_DATA, pmbuf,
 				     tx_param);
@@ -142,7 +141,6 @@ done:
 		wlan_write_data_complete(pmadapter, pmbuf, ret);
 		break;
 	case MLAN_STATUS_PENDING:
-		pmadapter->data_sent = MFALSE;
 		DBG_HEXDUMP(MDAT_D, "Tx", head_ptr + INTF_HEADER_LEN,
 			    MIN(pmbuf->data_len + sizeof(TxPD),
 				MAX_DATA_DUMP_LEN));
@@ -270,7 +268,7 @@ wlan_recv_packet_complete(IN pmlan_adapter pmadapter,
  *  @return         N/A
  */
 t_void
-wlan_add_buf_bypass_txqueue(mlan_adapter * pmadapter, pmlan_buffer pmbuf)
+wlan_add_buf_bypass_txqueue(mlan_adapter *pmadapter, pmlan_buffer pmbuf)
 {
 	pmlan_private priv = pmadapter->priv[pmbuf->bss_index];
 	ENTER();
@@ -281,7 +279,7 @@ wlan_add_buf_bypass_txqueue(mlan_adapter * pmadapter, pmlan_buffer pmbuf)
 					    priv->bypass_txq.plock);
 	pmadapter->bypass_pkt_count++;
 	util_enqueue_list_tail(pmadapter->pmoal_handle, &priv->bypass_txq,
-			       (pmlan_linked_list) pmbuf, MNULL, MNULL);
+			       (pmlan_linked_list)pmbuf, MNULL, MNULL);
 	pmadapter->callbacks.moal_spin_unlock(pmadapter->pmoal_handle,
 					      priv->bypass_txq.plock);
 	LEAVE();
@@ -295,7 +293,7 @@ wlan_add_buf_bypass_txqueue(mlan_adapter * pmadapter, pmlan_buffer pmbuf)
  *  @return         MFALSE if not empty; MTRUE if empty
  */
 INLINE t_u8
-wlan_bypass_tx_list_empty(mlan_adapter * pmadapter)
+wlan_bypass_tx_list_empty(mlan_adapter *pmadapter)
 {
 	return (pmadapter->bypass_pkt_count) ? MFALSE : MTRUE;
 }
@@ -308,7 +306,7 @@ wlan_bypass_tx_list_empty(mlan_adapter * pmadapter)
  *  @return      N/A
  */
 t_void
-wlan_cleanup_bypass_txq(mlan_private * priv)
+wlan_cleanup_bypass_txq(mlan_private *priv)
 {
 	pmlan_buffer pmbuf;
 	mlan_adapter *pmadapter = priv->adapter;
@@ -316,11 +314,11 @@ wlan_cleanup_bypass_txq(mlan_private * priv)
 	pmadapter->callbacks.moal_spin_lock(pmadapter->pmoal_handle,
 					    priv->bypass_txq.plock);
 	while ((pmbuf =
-		(pmlan_buffer) util_peek_list(pmadapter->pmoal_handle,
-					      &priv->bypass_txq, MNULL,
-					      MNULL))) {
+		(pmlan_buffer)util_peek_list(pmadapter->pmoal_handle,
+					     &priv->bypass_txq, MNULL,
+					     MNULL))) {
 		util_unlink_list(pmadapter->pmoal_handle, &priv->bypass_txq,
-				 (pmlan_linked_list) pmbuf, MNULL, MNULL);
+				 (pmlan_linked_list)pmbuf, MNULL, MNULL);
 		wlan_write_data_complete(pmadapter, pmbuf, MLAN_STATUS_FAILURE);
 		pmadapter->bypass_pkt_count--;
 	}
@@ -348,16 +346,16 @@ wlan_process_bypass_tx(pmlan_adapter pmadapter)
 	for (j = 0; j < pmadapter->priv_num; ++j) {
 		priv = pmadapter->priv[j];
 		if (priv) {
-			pmbuf = (pmlan_buffer) util_dequeue_list(pmadapter->
-								 pmoal_handle,
-								 &priv->
-								 bypass_txq,
-								 pmadapter->
-								 callbacks.
-								 moal_spin_lock,
-								 pmadapter->
-								 callbacks.
-								 moal_spin_unlock);
+			pmbuf = (pmlan_buffer)util_dequeue_list(pmadapter->
+								pmoal_handle,
+								&priv->
+								bypass_txq,
+								pmadapter->
+								callbacks.
+								moal_spin_lock,
+								pmadapter->
+								callbacks.
+								moal_spin_unlock);
 			if (pmbuf) {
 				PRINTM(MINFO, "Dequeuing bypassed packet %p\n",
 				       pmbuf);

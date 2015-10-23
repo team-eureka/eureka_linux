@@ -7,6 +7,7 @@ choice
 
 config ARCH_BERLIN2
 	bool "BG2"
+	select ARCH_REQUIRE_GPIOLIB
 	select USB_ARCH_HAS_EHCI if USB_SUPPORT
 	help
 	  Support for Marvell Berlin Generation 2 SoCs, based on the
@@ -15,17 +16,40 @@ endchoice
 
 choice
 	prompt "Choose SoCs"
-	default BERLIN2CT
+	default BERLIN2CDP
 	depends on ARCH_BERLIN2
 	help
 	  This option allows to select a SoC version.
 
 config BERLIN2CD
 	bool "BG2 CD"
+	select ARM_ERRATA_754322
+	select ARM_ERRATA_775420
 	help
 	  BG2 CD version
 
+config BERLIN2Q
+	bool "BG2 Q"
+	select ARM_ERRATA_754322
+	select ARM_ERRATA_764369 if SMP
+	help
+	  BG2 Q version
+
+config BERLIN2CDP
+	bool "BG2 CDp Common"
+	help
+	  BG2 CD+ version
 endchoice
+
+
+menu "BERLIN2 features"
+
+config  BERLIN_ASIC
+	bool "Support ASIC Version"
+	default y
+	help
+	  Berlin has FPGA and ASIC version. Say Y to support ASIC version.
+endmenu
 
 comment "BERLIN modules"
 
@@ -55,16 +79,16 @@ config BERLIN_I2C
 	  Enable support fo I2C bus in Berlin SoC
 
 config BERLIN_GPU
-        tristate "SoC's 2d GPU support"
-        default m
-        help
-          2D GPU support
+    tristate "SoC's 2d GPU support"
+    default m
+    help
+      2D GPU support
 
 config BERLIN_GPU3D
-        tristate "SoC's 3d GPU support"
-        default m
-        help
-          3D GPU support
+    tristate "SoC's 3d GPU support"
+    default m
+    help
+      3D GPU support
 
 config BERLIN_GPUMEM_FROM_SHM
         bool "allocate GPU memory from SHM"
@@ -74,10 +98,30 @@ config BERLIN_GPUMEM_FROM_SHM
           if reserve GPU MEM in Linux kernel, then set to n
 
 config BERLIN_PE
-        tristate "Support Presentation Engine"
-        default m
-        help
-          Enable support for Presentation Engine
+    tristate "Support Presentation Engine"
+    default m
+    help
+      Enable support for Presentation Engine
+
+config BERLIN_AMP
+    tristate "Support AMP"
+    default m
+    help
+      Enable support for AMP
+
+config BERLIN_TZDD
+    tristate "Support TrustZone"
+    select BERLIN_TZDD_CB
+    default m
+    help
+      Enable support for ARM TrustZone
+
+config BERLIN_TZDD_CB
+    tristate "Support TrustZone Callback"
+	depends on BERLIN_TZDD
+    default m
+    help
+      Enable support for TrustZone event callback
 
 config BERLIN_PXA3XX_NFC
 	tristate "Support NAND Flash Controller (fork of pxa3xx_nand)"
@@ -98,6 +142,16 @@ config BERLIN_NAND_RANDOMIZER
 	  For chips that don't build in HW randomizer, SW randomizer is needed.
 	  Say Y here if you have no idea
 
+config BERLIN_NAND_READ_RETRY
+	bool "Support NAND read retry when ecc fail in read operation"
+	default y
+	depends on BERLIN_PXA3XX_NFC
+	help
+	  To improve nand read ability of error correction. When ecc fail in read operation,
+	  change the read cmd parameter of nand chip. Every kind of Nand chip's READ RETRY feature
+	  diff from each other. If nand chip do not support READ RETRY, this feature will do nothing.
+	  Now support only hynix nand chip read retry.
+
 config BERLIN_SDIO_WLAN_8787
 	tristate "SDIO Wlan (IEEE802.11 A|B|G|N) driver for wlan8787 module"
 	default n
@@ -107,16 +161,67 @@ config BERLIN_SDIO_WLAN_8787
 	select WEXT_SPY
 	help
 	  This is the wifi module for Berlin. Please try build it for module only.
+config BERLIN_SDIO_WLAN_8797
+	tristate "SDIO Wlan (IEEE802.11 A|B|G|N) driver for wlan8797 module"
+	default n
+	depends on MMC_SDHCI_MV
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	select WEXT_SPY
+	help
+	  This is the wifi module for Berlin. Please try build it for module only.
 
 config BERLIN_SDIO_WLAN_8801
-       tristate "SDIO Wlan (IEEE802.11 A|B|G|N) driver for wlan8801 module"
-       default n
-       depends on MMC_SDHCI_MV
-       select WIRELESS_EXT
-       select WEXT_PRIV
-       select WEXT_SPY
-       help
-        This is the wifi module for Berlin. Please try build it for module only.
+	tristate "SDIO Wlan (IEEE802.11 A|B|G|N) driver for wlan8801 module"
+	default n
+	depends on MMC_SDHCI_MV
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	select WEXT_SPY
+	help
+	  This is the wifi module for Berlin. Please try build it for module only.
+
+config BERLIN_SDIO_WLAN_8887
+	tristate "SDIO Wlan (IEEE802.11 A|B|G|N) driver for wlan8887 module"
+	default n
+	depends on MMC_SDHCI_MV
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	select WEXT_SPY
+	help
+	  This is the wifi module for Berlin. Please try build it for module only.
+
+config BERLIN_SDIO_BT_8887
+        tristate "SDIO Bluetooth/BLE support for Marvell's 8887 SoC"
+        default m
+	depends on CONFIG_BT
+	depends on CONFIG_BT_RFCOMM
+	depends on CONFIG_BT_RFCOMM_TTY
+	depends on CONFIG_BT_BNEP
+	depends on CONFIG_BT_BNEP_MC_FILTER
+	depends on CONFIG_BT_BNEP_PROTO_FILTER
+	depends on CONFIG_BT_HIDP
+	depends on CONFIG_BT_MRVL
+	depends on CONFIG_HID
+	depends on CONFIG_HIDRAW
+	depends on CONFIG_UHID
+	depends on CONFIG_HID_GENERIC
+        help
+          This is defualt bluetooth module for Berlin based platform.
+
+config BERLIN_SDIO_BT_8887_CHAR_DRV
+        tristate "SDIO Bluetooth/BLE Bluedroid support for Marvell's 8887 SoC"
+        default m
+	depends on !CONFIG_BT
+	depends on !CONFIG_BT_RFCOMM
+	depends on !CONFIG_BT_RFCOMM_TTY
+	depends on !CONFIG_BT_BNEP
+	depends on !CONFIG_BT_BNEP_MC_FILTER
+	depends on !CONFIG_BT_BNEP_PROTO_FILTER
+	depends on !CONFIG_BT_HIDP
+	depends on !CONFIG_BT_MRVL
+        help
+          This is defualt bluetooth module for Berlin based platform using Bluedroid stack.
 
 config BERLIN_FASTLOGO
 	tristate "Support fast logo"
@@ -126,7 +231,7 @@ config BERLIN_FASTLOGO
 	  
 config BERLIN_PWM
 	bool "Support PWM"
-	default n
+	default y
 	help
 	  Enable support for PWM	  
 

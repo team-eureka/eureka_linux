@@ -19,7 +19,7 @@
 #ifndef _CC_DSS_H_
 #define _CC_DSS_H_
 
-#include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include "cc_list.h"
 
 #define MV_CC_SID_BIT_DYNAMIC 				(0x80000000)
@@ -31,11 +31,6 @@
 #define MV_CC_GSConfigList_EndFlagID			(0x7FFFFFFF)
 #define MV_CC_ServiceID_DynamicStart			(0x80000000)
 #define MV_CC_ServiceID_DynamicApply			(0x80000000)
-
-#define MV_OSAL_Mutex_Create(sem)			spin_lock_init(sem)
-#define MV_OSAL_Mutex_Lock(sem)				spin_lock_bh(&sem)
-#define MV_OSAL_Mutex_Unlock(sem)			spin_unlock_bh(&sem)
-#define MV_OSAL_Mutex_Destroy(sem)
 
 
 typedef struct _MV_CC_DSS_Status {
@@ -64,13 +59,14 @@ typedef struct mv_cc_task {
 	char cc_taskname[16];
 	MV_CC_Node *serverid_head;
 	MV_CC_Node *cbuf_head;
+	struct mutex cbuf_Mutex;
 } MV_CC_Task;
 
 
 typedef struct _MV_CC_DSP {
-	spinlock_t		m_hGSListMutex;
+	struct mutex 		m_hGSListMutex;
 	MV_CC_ServiceID_U32_t	m_SeqID;
-	spinlock_t		m_SeqIDMutex;
+	struct mutex 		m_SeqIDMutex;
 	MV_CC_DSS_Status_t	m_Status;
 } MV_CC_DSP_t, *pMV_CC_DSP_t;
 

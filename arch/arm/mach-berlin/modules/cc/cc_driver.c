@@ -133,6 +133,7 @@ static int cc_driver_open (struct inode *inode, struct file *filp)
 
 	singlenode_init(&cc_task->serverid_head);
 	singlenode_init(&cc_task->cbuf_head);
+	mutex_init(&cc_task->cbuf_Mutex);
 
 	filp->private_data = cc_task;
 	cc_debug("cc_driver_open ok\n");

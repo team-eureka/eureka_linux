@@ -1611,7 +1611,7 @@ woal_cfg80211_del_beacon(struct wiphy *wiphy, struct net_device *dev)
 	/* if the bss is still running, then stop it */
 	if (priv->bss_started == MTRUE) {
 		if (MLAN_STATUS_SUCCESS !=
-		    woal_uap_bss_ctrl(priv, MOAL_IOCTL_WAIT, UAP_BSS_STOP)) {
+		    woal_uap_bss_ctrl(priv, MOAL_IOCTL_WAIT_TIMEOUT, UAP_BSS_STOP)) {
 			ret = -EFAULT;
 			goto done;
 		}

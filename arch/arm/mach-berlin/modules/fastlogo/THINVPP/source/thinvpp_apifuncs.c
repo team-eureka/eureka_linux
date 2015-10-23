@@ -20,8 +20,7 @@
 
 #define _VPP_APIFUNCS_C_
 
-#include "thinvpp_module.h"
-#include "thinvpp_apifuncs.h"
+#include "fastlogo.h"
 
 /*******************************************************************
  * FUNCTION: set CPCB(for Berlin) or DV(for Galois) output resolution

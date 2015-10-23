@@ -106,21 +106,43 @@ int GPIO_PortWrite(int port, int value)
 	int reg_ddr, reg_dr, gpio_port = port;
 	int ddr, dr;
 
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+	if((port >= 0) && (port < 32)){
+#else
 	if((port >= 0) && (port < 8)){
+#endif
 		reg_ddr = APB_GPIO_INST0_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_dr = APB_GPIO_INST0_BASE + APB_GPIO_SWPORTA_DR;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+	} else if ((port >= 32) && (port < 64)){
+#else
 	} else if ((port >= 8) && (port < 16)){
+#endif
 		reg_ddr = APB_GPIO_INST1_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_dr = APB_GPIO_INST1_BASE + APB_GPIO_SWPORTA_DR;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+		port -= 32;
+	} else if ((port >= 64) && (port < 96)){
+#else
 		port -= 8;
 	} else if ((port >= 16) && (port < 24)){
+#endif
 		reg_ddr = APB_GPIO_INST2_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_dr = APB_GPIO_INST2_BASE + APB_GPIO_SWPORTA_DR;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+		port -= 64;
+	} else if ((port >= 96) && (port < 128)){
+#else
 		port -= 16;
 	} else if ((port >= 24) && (port < 32)){
+#endif
 		reg_ddr = APB_GPIO_INST3_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_dr = APB_GPIO_INST3_BASE + APB_GPIO_SWPORTA_DR;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+		port -= 96;
+#else
 		port -= 24;
+#endif
 	} else
 		return -1;
 
@@ -158,21 +180,43 @@ int GPIO_PortRead(int port, int *value)
 	int reg_ddr, reg_ext, gpio_port = port;
 	int ddr, ext;
 
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+	if((port >= 0) && (port < 32)){
+#else
 	if((port >= 0) && (port < 8)){
+#endif
 		reg_ddr = APB_GPIO_INST0_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ext = APB_GPIO_INST0_BASE + APB_GPIO_EXT_PORTA;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+	} else if ((port >= 32) && (port < 64)){
+#else
 	} else if ((port >= 8) && (port < 16)){
+#endif
 		reg_ddr = APB_GPIO_INST1_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ext = APB_GPIO_INST1_BASE + APB_GPIO_EXT_PORTA;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+		port -= 32;
+	} else if ((port >= 64) && (port < 96)){
+#else
 		port -= 8;
 	} else if ((port >= 16) && (port < 24)){
+#endif
 		reg_ddr = APB_GPIO_INST2_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ext = APB_GPIO_INST2_BASE + APB_GPIO_EXT_PORTA;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+		port -= 64;
+	} else if ((port >= 96) && (port < 128)){
+#else
 		port -= 16;
 	} else if ((port >= 24) && (port < 32)){
+#endif
 		reg_ddr = APB_GPIO_INST3_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ext = APB_GPIO_INST3_BASE + APB_GPIO_EXT_PORTA;
+#if defined(CONFIG_BERLIN2Q) || defined(CONFIG_BERLIN2CDP)
+		port -= 96;
+#else
 		port -= 24;
+#endif
 	} else
 		return -1;
 
@@ -207,12 +251,23 @@ int GPIO_PortSetInOut(int port, int in)
 	int reg_ddr, reg_ctl, gpio_port = port;
 	int ddr, ctl;
 
+#if defined(CONFIG_BERLIN2CDP)
+        if((port >= 0) && (port < 32)){
+#else
 	if((port >= 0) && (port < 8)){
+#endif
 		reg_ddr = APB_GPIO_INST0_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ctl = APB_GPIO_INST0_BASE + APB_GPIO_PORTA_CTL;
+#if defined(CONFIG_BERLIN2CDP)
+        } else if ((port >= 32) && (port < 64)){
+#else
 	} else if ((port >= 8) && (port < 16)){
+#endif
 		reg_ddr = APB_GPIO_INST1_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ctl = APB_GPIO_INST1_BASE + APB_GPIO_PORTA_CTL;
+#if defined(CONFIG_BERLIN2CDP)
+                port -= 32;
+#else
 		port -= 8;
 	} else if ((port >= 16) && (port < 24)){
 		reg_ddr = APB_GPIO_INST2_BASE + APB_GPIO_SWPORTA_DDR;
@@ -222,16 +277,18 @@ int GPIO_PortSetInOut(int port, int in)
 		reg_ddr = APB_GPIO_INST3_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ctl = APB_GPIO_INST3_BASE + APB_GPIO_PORTA_CTL;
 		port -= 24;
+#endif
 	} else
 		return -1;
 
 	GPIO_PortLock(gpio_port);
 
+#if !defined(CONFIG_BERLIN2CDP)
 	/* software mode */
 	GA_REG_WORD32_READ(reg_ctl, &ctl);
 	ctl &= ~(1 << port);
 	GA_REG_WORD32_WRITE(reg_ctl, ctl);
-
+#endif
 	/* set port to output mode */
 	GA_REG_WORD32_READ(reg_ddr, &ddr);
 	if (in)
@@ -641,15 +698,27 @@ int SM_GPIO_PortWrite(int port, int value)
 	int ddr, dr, ctl;
 	int gpio_port = port;
 
+#ifdef CONFIG_BERLIN2Q
+	if((port >= 0) && (port < 32)){
+#else
 	if((port >= 0) && (port < 8)){
+#endif
 		reg_ddr = SM_APB_GPIO_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_dr = SM_APB_GPIO_BASE + APB_GPIO_SWPORTA_DR;
 		reg_ctl = SM_APB_GPIO_BASE + APB_GPIO_PORTA_CTL;
+#ifdef CONFIG_BERLIN2Q
+	} else if ((port >= 32) && (port < 64)){
+#else
 	} else if ((port >= 8) && (port < MAX_PORT)){
+#endif
 		reg_ddr = SM_APB_GPIO1_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_dr = SM_APB_GPIO1_BASE + APB_GPIO_SWPORTA_DR;
 		reg_ctl = SM_APB_GPIO1_BASE + APB_GPIO_PORTA_CTL;
+#ifdef CONFIG_BERLIN2Q
+		port -= 32;
+#else
 		port -= 8;
+#endif
 	} else
 		return -1;
 
@@ -693,15 +762,27 @@ int SM_GPIO_PortRead(int port, int *value)
 	int ddr, ext, ctl;
 	int gpio_port = port;
 
+#ifdef CONFIG_BERLIN2Q
+	if((port >= 0) && (port < 32)){
+#else
 	if((port >= 0) && (port < 8)){
+#endif
 		reg_ddr = SM_APB_GPIO_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ext = SM_APB_GPIO_BASE + APB_GPIO_EXT_PORTA;
 		reg_ctl = SM_APB_GPIO_BASE + APB_GPIO_PORTA_CTL;
+#ifdef CONFIG_BERLIN2Q
+	} else if ((port >= 32) && (port < 64)){
+#else
 	} else if ((port >= 8) && (port < MAX_PORT)){
+#endif
 		reg_ddr = SM_APB_GPIO1_BASE + APB_GPIO_SWPORTA_DDR;
 		reg_ext = SM_APB_GPIO1_BASE + APB_GPIO_EXT_PORTA;
 		reg_ctl = SM_APB_GPIO1_BASE + APB_GPIO_PORTA_CTL;
+#ifdef CONFIG_BERLIN2Q
+		port -= 32;
+#else
 		port -= 8;
+#endif
 	} else
 		return -1;
 

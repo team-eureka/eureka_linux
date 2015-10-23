@@ -1,6 +1,6 @@
-/******************************************************************************* 
-* Copyright (C) Marvell International Ltd. and its affiliates 
-* 
+/*******************************************************************************
+* Copyright (C) Marvell International Ltd. and its affiliates
+*
  * Marvell GPL License Option
  *
  * If you received this File from Marvell, you may opt to use, redistribute and/or
@@ -46,7 +46,10 @@ HRESULT MV_CC_CBufSrv_Create( pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 
 			GaloisMemcpy(pSrvInfo, &SrvInfo_CBuf,
 				sizeof(MV_CC_DSS_ServiceInfo_CBuf_t));
+
+			mutex_lock(&cc_task->cbuf_Mutex);
 			singlenode_add(cc_task->cbuf_head, pSrvInfo->m_ServiceID);
+			mutex_unlock(&cc_task->cbuf_Mutex);
 
 			return S_OK;
 		}
@@ -68,7 +71,7 @@ HRESULT MV_CC_CBufSrv_Create( pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 
 	pSrvInfo->m_seqid = 1;
 
-	res = MV_CC_DSS_Reg((pMV_CC_DSS_ServiceInfo_t)pSrvInfo,cc_task);
+	res = MV_CC_DSS_Reg((pMV_CC_DSS_ServiceInfo_t)pSrvInfo, NULL);
 	if (res != S_OK) {
 		MV_CC_DBG_Error(res, "MV_CC_CBufSrv_Create"
 			" MV_CC_DSS_Reg", NULL);
@@ -77,7 +80,9 @@ HRESULT MV_CC_CBufSrv_Create( pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 	MV_CC_DBG_Info("MV_CC_CBufSrv_Create"
 		" ServiceID = 0x%08X\n", pSrvInfo->m_ServiceID);
 
+	mutex_lock(&cc_task->cbuf_Mutex);
 	singlenode_add(cc_task->cbuf_head, pSrvInfo->m_ServiceID);
+	mutex_unlock(&cc_task->cbuf_Mutex);
 
 	return S_OK;
 }
@@ -95,10 +100,12 @@ HRESULT MV_CC_CBufSrv_Destroy(pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 	if ((pSrvInfo == NULL))
 		MV_CC_DBG_Error(E_INVALIDARG, "MV_CC_CBufSrv_Destroy", NULL);
 
-	singlenode_delete(cc_task->cbuf_head, pSrvInfo->m_ServiceID);
-
 	if (pSrvInfo->m_ServiceID == MV_CC_ServiceID_DynamicApply)
 		MV_CC_DBG_Error(E_BADVALUE, "MV_CC_CBufSrv_Destroy", NULL);
+
+	mutex_lock(&cc_task->cbuf_Mutex);
+	singlenode_delete(cc_task->cbuf_head, pSrvInfo->m_ServiceID);
+	mutex_unlock(&cc_task->cbuf_Mutex);
 
 	res = MV_CC_DSS_Inquiry((pMV_CC_DSS_ServiceInfo_t)pSrvInfo);
 	if (res != S_OK) {
@@ -115,21 +122,19 @@ HRESULT MV_CC_CBufSrv_Destroy(pMV_CC_DSS_ServiceInfo_CBuf_t pSrvInfo,
 			MV_CC_DBG_Error(res, "MV_CC_CBufSrv_Destroy"
 				" MV_CC_DSS_Update", NULL);
 		}
+
 		return S_OK;
 	}
 
 	// destroy cbuf body
-	res = MV_CC_CBufBody_Destroy(pSrvInfo->m_CBufBody_SHMOffset);
-	if (res != S_OK) {
-		MV_CC_DBG_Error(res, "MV_CC_CBufSrv_Create"
-			" MV_CC_CBufBody_Destroy", NULL);
-	}
+	MV_CC_CBufBody_Destroy(pSrvInfo->m_CBufBody_SHMOffset);
 
-	res = MV_CC_DSS_Free((pMV_CC_DSS_ServiceInfo_t)pSrvInfo,cc_task);
+	res = MV_CC_DSS_Free((pMV_CC_DSS_ServiceInfo_t)pSrvInfo, NULL);
 	if (res != S_OK){
 		MV_CC_DBG_Error(res, "MV_CC_CBufSrv_Create"
 			" MV_CC_DSS_Reg", NULL);
 	}
+
 	return S_OK;
 }
 
@@ -139,12 +144,23 @@ HRESULT MV_CC_CBufSrv_Release_By_Taskid(MV_CC_Task *cc_task)
 	unsigned int first_serverid = 0;
 	MV_CC_DSS_ServiceInfo_t pSrvInfo_Search;
 	MV_CC_Node *head = cc_task->cbuf_head;
+	HRESULT res = 0;
 
-	while (singlenode_checkempty(head)) {
-		first_serverid = singlenode_getfirstnode(head);
-		pSrvInfo_Search.m_ServiceID = first_serverid;
-		MV_CC_CBufSrv_Destroy(&pSrvInfo_Search, cc_task);
+	while (1) {
+		mutex_lock(&cc_task->cbuf_Mutex);
+		if (singlenode_checkempty(head)) {
+			first_serverid = singlenode_getfirstnode(head);
+			pSrvInfo_Search.m_ServiceID = first_serverid;
+			mutex_unlock(&cc_task->cbuf_Mutex);
+			MV_CC_CBufSrv_Destroy(&pSrvInfo_Search, cc_task);
+		} else {
+			mutex_unlock(&cc_task->cbuf_Mutex);
+			break;
+		}
 	}
 
-	return singlenode_exit(head);
+	mutex_lock(&cc_task->cbuf_Mutex);
+	res = singlenode_exit(head);
+	mutex_unlock(&cc_task->cbuf_Mutex);
+	return res;
 }
