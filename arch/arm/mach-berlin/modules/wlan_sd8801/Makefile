@@ -47,12 +47,22 @@ CONFIG_WIFI_DISPLAY_SUPPORT=y
 # Re-association in driver
 CONFIG_REASSOCIATION=y
 
+CONFIG_802_11W=y
 
 # Manufacturing firmware support
 CONFIG_MFG_CMD_SUPPORT=y
 
 # Big-endian platform
 CONFIG_BIG_ENDIAN=n
+
+# Enable driver based authenticator
+#CONFIG_DRV_EMBEDDED_AUTHENTICATOR=y
+#CONFIG_EMBEDDED_SUPP_AUTH=y
+
+
+# Enable driver based supplicant
+#CONFIG_DRV_EMBEDDED_SUPPLICANT=y
+#CONFIG_EMBEDDED_SUPP_AUTH=y
 
 # Enable SDIO multi-port Tx aggregation
 CONFIG_SDIO_MULTI_PORT_TX_AGGR=y
@@ -70,6 +80,9 @@ CONFIG_SDIO_SUSPEND_RESUME=y
 
 CONFIG_ANDROID_KERNEL=n
 
+#32bit app over 64bit kernel support
+CONFIG_USERSPACE_32BIT_OVER_KERNEL_64BIT=n
+
 # Use static link for app build
 export CONFIG_STATIC_LINK=y
 
@@ -80,6 +93,12 @@ export CONFIG_STATIC_LINK=y
 MODEXT = ko
 EXTRA_CFLAGS += -I$(srctree)/include
 EXTRA_CFLAGS += -I$(srctree)/arch/arm/mach-berlin/wlan_sd8801/mlan
+EXTRA_CFLAGS += -I$(PWD)/mlan/esa
+EXTRA_CFLAGS += -I$(PWD)/mlan/esa/common
+EXTRA_CFLAGS += -I$(PWD)/arch/arm/mach-berlin/modules/wlan_sd8801/mlan
+EXTRA_CFLAGS += -I$(PWD)/arch/arm/mach-berlin/modules/wlan_sd8801/mlan/esa
+EXTRA_CFLAGS += -I$(PWD)/arch/arm/mach-berlin/modules/wlan_sd8801/mlan/esa/common
+
 #EXTRA_CFLAGS += -I$(M)/mlan
 EXTRA_CFLAGS += -DLINUX
 
@@ -146,6 +165,10 @@ ifeq ($(CONFIG_BIG_ENDIAN),y)
 	EXTRA_CFLAGS += -DBIG_ENDIAN_SUPPORT
 endif
 
+ifeq ($(CONFIG_USERSPACE_32BIT_OVER_KERNEL_64BIT),y)
+	EXTRA_CFLAGS += -DUSERSPACE_32BIT_OVER_KERNEL_64BIT
+endif
+
 ifeq ($(CONFIG_SDIO_MULTI_PORT_TX_AGGR),y)
 	EXTRA_CFLAGS += -DSDIO_MULTI_PORT_TX_AGGR
 endif
@@ -167,6 +190,8 @@ endif
 ifeq ($(CONFIG_ANDROID_KERNEL), y)
 	EXTRA_CFLAGS += -DANDROID_KERNEL
 endif
+
+
 
 #############################################################################
 # Make Targets
@@ -258,6 +283,22 @@ endif
 endif
 endif
 
+
+
+ifeq ($(CONFIG_EMBEDDED_SUPP_AUTH), y)
+	EXTRA_CFLAGS += -I$(M)/mlan/esa
+	EXTRA_CFLAGS += -I$(M)/mlan/esa/common
+endif
+
+ifeq ($(CONFIG_DRV_EMBEDDED_AUTHENTICATOR), y)
+	    EXTRA_CFLAGS += -DDRV_EMBEDDED_AUTHENTICATOR
+endif
+
+ifeq ($(CONFIG_DRV_EMBEDDED_SUPPLICANT), y)
+	    EXTRA_CFLAGS += -DDRV_EMBEDDED_SUPPLICANT
+endif
+
+
 MOALOBJS =	mlinux/moal_main.o \
 		mlinux/moal_ioctl.o \
 		mlinux/moal_shim.o \
@@ -275,7 +316,9 @@ MLANOBJS += mlan/mlan_11n_aggr.o
 MLANOBJS += mlan/mlan_11n_rxreorder.o
 MLANOBJS += mlan/mlan_11n.o
 MLANOBJS += mlan/mlan_11d.o
+MLANOBJS += mlan/mlan_11h.o
 ifeq ($(CONFIG_STA_SUPPORT),y)
+MLANOBJS += mlan/mlan_meas.o
 MLANOBJS += mlan/mlan_scan.o \
 			mlan/mlan_sta_ioctl.o \
 			mlan/mlan_sta_rx.o \
@@ -315,6 +358,38 @@ MOALOBJS += mlinux/moal_debug.o
 endif
 endif
 
+ifeq ($(CONFIG_EMBEDDED_SUPP_AUTH), y)
+MLANOBJS += mlan/esa/common/rc4.o \
+			mlan/esa/common/aes_cmac_rom.o \
+			mlan/esa/common/hmac_sha1.o \
+			mlan/esa/common/md5.o \
+			mlan/esa/common/mrvl_sha256_crypto.o \
+			mlan/esa/common/hmac_md5.o \
+			mlan/esa/common/crypt_new_rom.o \
+			mlan/esa/common/rijndael.o \
+			mlan/esa/common/sha1.o \
+			mlan/esa/common/sha256.o \
+			mlan/esa/common/pass_phrase.o \
+			mlan/esa/common/pmkCache.o \
+			mlan/esa/common/pmkCache_rom.o \
+			mlan/esa/common/parser.o \
+			mlan/esa/common/parser_rom.o \
+			mlan/esa/keyMgmtApStaCommon.o \
+			mlan/esa/hostsa_init.o \
+			mlan/esa/authenticator_api.o
+endif
+
+ifeq ($(CONFIG_DRV_EMBEDDED_SUPPLICANT),y)
+MLANOBJS += mlan/esa/keyMgmtSta.o \
+			mlan/esa/keyMgmtSta_rom.o \
+			mlan/esa/supplicant.o
+endif
+
+ifeq ($(CONFIG_DRV_EMBEDDED_AUTHENTICATOR),y)
+MLANOBJS += mlan/esa/AssocAp_srv_rom.o \
+			mlan/esa/keyMgmtAp_rom.o \
+			mlan/esa/keyMgmtAp.o
+endif
 
 
 obj-$(CONFIG_BERLIN_SDIO_WLAN_8801) := 88mlan.o

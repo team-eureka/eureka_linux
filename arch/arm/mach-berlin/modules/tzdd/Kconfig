@@ -1,0 +1,7 @@
+
+menuconfig MV_TZDD
+	tristate "Enable Trust Zone Device Driver"
+	depends on TZ_HYPERVISOR
+	default m
+help
+	Marvell Trust Execution Environment (TEE) Solution in non-trusted world

@@ -37,7 +37,7 @@
 /* define for custom ie operation */
 #define MLAN_CUSTOM_IE_AUTO_IDX_MASK    0xffff
 #define MLAN_CUSTOM_IE_DELETE_MASK      0x0
-#define MLAN_CUSTOM_IE_NEW_MASK      	0x8000
+#define MLAN_CUSTOM_IE_NEW_MASK         0x8000
 #define TLV_TYPE_MGMT_IE                0x0169
 #define MGMT_MASK_ASSOC_REQ             0x01
 #define MGMT_MASK_REASSOC_REQ           0x04
@@ -73,7 +73,7 @@ t_u8 woal_band_cfg_to_ieee_band(t_u32 band);
 int woal_cfg80211_change_virtual_intf(struct wiphy *wiphy,
 				      struct net_device *dev,
 				      enum nl80211_iftype type,
-				      u32 * flags, struct vif_params *params);
+				      u32 *flags, struct vif_params *params);
 
 int woal_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed);
 
@@ -82,29 +82,30 @@ int woal_cfg80211_add_key(struct wiphy *wiphy,
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 36) || defined(COMPAT_WIRELESS)
 			  bool pairwise,
 #endif
-			  const t_u8 * mac_addr, struct key_params *params);
+			  const t_u8 *mac_addr, struct key_params *params);
 
 int woal_cfg80211_del_key(struct wiphy *wiphy,
 			  struct net_device *dev, t_u8 key_index,
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 36) || defined(COMPAT_WIRELESS)
 			  bool pairwise,
 #endif
-			  const t_u8 * mac_addr);
+			  const t_u8 *mac_addr);
 
 int woal_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
 				   struct net_device *dev,
-				   const u8 * peer,
+				   const u8 *peer,
 				   const struct cfg80211_bitrate_mask *mask);
 
 int woal_cfg80211_set_antenna(struct wiphy *wiphy, u32 tx_ant, u32 rx_ant);
 
 #ifdef STA_CFG80211
 #ifdef STA_SUPPORT
-int woal_set_rf_channel(moal_private * priv,
+int woal_set_rf_channel(moal_private *priv,
 			struct ieee80211_channel *chan,
-			enum nl80211_channel_type channel_type);
-mlan_status woal_inform_bss_from_scan_result(moal_private * priv,
-					     mlan_ssid_bssid * ssid_bssid,
+			enum nl80211_channel_type channel_type,
+			t_u8 wait_option);
+mlan_status woal_inform_bss_from_scan_result(moal_private *priv,
+					     mlan_ssid_bssid *ssid_bssid,
 					     t_u8 wait_option);
 #endif
 #endif
@@ -127,6 +128,12 @@ int woal_cfg80211_set_default_key(struct wiphy *wiphy,
 				  struct net_device *dev, t_u8 key_index);
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30) || defined(COMPAT_WIRELESS)
+int woal_cfg80211_set_default_mgmt_key(struct wiphy *wiphy,
+				       struct net_device *netdev,
+				       t_u8 key_index);
+#endif
+
 void woal_cfg80211_mgmt_frame_register(struct wiphy *wiphy,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
 				       struct wireless_dev *wdev,
@@ -141,57 +148,78 @@ int woal_cfg80211_mgmt_tx(struct wiphy *wiphy,
 #else
 			  struct net_device *dev,
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+			  struct cfg80211_mgmt_tx_params *params,
+#else
 			  struct ieee80211_channel *chan, bool offchan,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 			  enum nl80211_channel_type channel_type,
 			  bool channel_type_valid,
 #endif
-			  unsigned int wait, const u8 * buf, size_t len,
+			  unsigned int wait, const u8 *buf, size_t len,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 2, 0) || defined(COMPAT_WIRELESS)
 			  bool no_cck,
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0)
 			  bool dont_wait_for_ack,
 #endif
+#endif
 			  u64 * cookie);
 
-mlan_status woal_register_cfg80211(moal_private * priv);
+mlan_status woal_register_cfg80211(moal_private *priv);
 
 extern struct ieee80211_supported_band cfg80211_band_2ghz;
 extern struct ieee80211_supported_band cfg80211_band_5ghz;
 extern const u32 cfg80211_cipher_suites[10];
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+/**vendor event*/
+enum vendor_event {
+	event_hang = 0,
+	event_max,
+};
+/**vendor sub command*/
+enum vendor_sub_command {
+	sub_cmd_set_drvdbg = 0,
+	sub_cmd_max,
+};
+void woal_register_cfg80211_vendor_command(struct wiphy *wiphy);
+int woal_cfg80211_vendor_event(IN moal_private *priv,
+			       IN int event, IN t_u8 *data, IN int len);
+#endif
+
 #if defined(STA_SUPPORT) && defined(UAP_SUPPORT)
-int woal_cfg80211_bss_role_cfg(moal_private * priv, t_u16 action,
-			       t_u8 * bss_role);
+int woal_cfg80211_bss_role_cfg(moal_private *priv, t_u16 action,
+			       t_u8 *bss_role);
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0)
 struct wireless_dev *woal_cfg80211_add_virtual_intf(struct wiphy *wiphy,
 						    const char *name,
 						    enum nl80211_iftype type,
-						    u32 * flags,
+						    u32 *flags,
 						    struct vif_params *params);
 #else
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
 struct wireless_dev *woal_cfg80211_add_virtual_intf(struct wiphy *wiphy,
 						    char *name,
 						    enum nl80211_iftype type,
-						    u32 * flags,
+						    u32 *flags,
 						    struct vif_params *params);
 #else
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 37) || defined(COMPAT_WIRELESS)
 struct net_device *woal_cfg80211_add_virtual_intf(struct wiphy *wiphy,
 						  char *name,
 						  enum nl80211_iftype type,
-						  u32 * flags,
+						  u32 *flags,
 						  struct vif_params *params);
 #else
 int woal_cfg80211_add_virtual_intf(struct wiphy *wiphy,
 				   char *name, enum nl80211_iftype type,
-				   u32 * flags, struct vif_params *params);
+				   u32 *flags, struct vif_params *params);
 #endif
 #endif
 #endif
+int woal_cfg80211_del_virt_if(struct wiphy *wiphy, struct net_device *dev);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
 int woal_cfg80211_del_virtual_intf(struct wiphy *wiphy,
 				   struct wireless_dev *wdev);
@@ -224,7 +252,7 @@ int woal_cfg80211_del_virtual_intf(struct wiphy *wiphy, struct net_device *dev);
 #define P2P_ACT_FRAME_OUI_OFFSET          26
 /** P2P subtype offset */
 #define P2P_ACT_FRAME_OUI_SUBTYPE_OFFSET  30
-void woal_cfg80211_display_p2p_actframe(const t_u8 * buf, int len,
+void woal_cfg80211_display_p2p_actframe(const t_u8 *buf, int len,
 					struct ieee80211_channel *chan,
 					const t_u8 flag);
 
@@ -236,24 +264,29 @@ void woal_cfg80211_display_p2p_actframe(const t_u8 * buf, int len,
 #endif /* COMPAT_WIRELESS */
 #if LINUX_VERSION_CODE >= WIFI_DIRECT_KERNEL_VERSION
 /** Define for remain on channel duration timer */
-#define MAX_REMAIN_ON_CHANNEL_DURATION      (1000 * 5)
+#define MAX_REMAIN_ON_CHANNEL_DURATION      (1000)
 
-int woal_cfg80211_init_p2p_client(moal_private * priv);
+int woal_cfg80211_init_p2p_client(moal_private *priv);
 
-int woal_cfg80211_init_p2p_go(moal_private * priv);
+int woal_cfg80211_init_p2p_go(moal_private *priv);
 
-int woal_cfg80211_deinit_p2p(moal_private * priv);
+int woal_cfg80211_deinit_p2p(moal_private *priv);
 
-int woal_cfg80211_remain_on_channel_cfg(moal_private * priv,
+int woal_cfg80211_remain_on_channel_cfg(moal_private *priv,
 					t_u8 wait_option, t_u8 remove,
-					t_u8 * status,
+					t_u8 *status,
 					struct ieee80211_channel *chan,
 					enum nl80211_channel_type channel_type,
 					t_u32 duration);
 int woal_uap_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
-				  u8 * mac, struct station_info *stainfo);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+				  const u8 *mac,
+#else
+				  u8 *mac,
+#endif
+				  struct station_info *stainfo);
 
-void woal_remove_virtual_interface(moal_handle * handle);
+void woal_remove_virtual_interface(moal_handle *handle);
 
 #endif /* KERNEL_VERSION */
 #endif /* WIFI_DIRECT_SUPPORT && V14_FEATURE */
@@ -278,25 +311,30 @@ int woal_cfg80211_set_beacon(struct wiphy *wiphy,
 #endif
 
 int woal_cfg80211_del_beacon(struct wiphy *wiphy, struct net_device *dev);
-int woal_cfg80211_del_station(struct wiphy *wiphy,
-			      struct net_device *dev, u8 * mac_addr);
+int woal_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+			      const u8 *mac_addr);
+#else
+			      u8 *mac_addr);
 #endif
-void woal_clear_all_mgmt_ies(moal_private * priv);
-int woal_cfg80211_mgmt_frame_ie(moal_private * priv,
-				const t_u8 * beacon_ies, size_t beacon_ies_len,
-				const t_u8 * proberesp_ies,
+#endif
+void woal_clear_all_mgmt_ies(moal_private *priv, t_u8 wait_option);
+int woal_cfg80211_mgmt_frame_ie(moal_private *priv,
+				const t_u8 *beacon_ies, size_t beacon_ies_len,
+				const t_u8 *proberesp_ies,
 				size_t proberesp_ies_len,
-				const t_u8 * assocresp_ies,
+				const t_u8 *assocresp_ies,
 				size_t assocresp_ies_len,
-				const t_u8 * probereq_ies,
-				size_t probereq_ies_len, t_u16 mask);
+				const t_u8 *probereq_ies,
+				size_t probereq_ies_len, t_u16 mask,
+				t_u8 wait_option);
 
-t_u8 woal_is_any_interface_active(moal_handle * handle);
+t_u8 woal_is_any_interface_active(moal_handle *handle);
 
-int woal_get_active_intf_freq(moal_private * priv);
+int woal_get_active_intf_freq(moal_private *priv);
 
 void woal_cfg80211_setup_ht_cap(struct ieee80211_sta_ht_cap *ht_info,
-				t_u32 dev_cap, t_u8 * mcs_set);
-int woal_cfg80211_assoc(moal_private * priv, void *sme);
+				t_u32 dev_cap, t_u8 *mcs_set);
+int woal_cfg80211_assoc(moal_private *priv, void *sme, t_u8 wait_option);
 
 #endif /* _MOAL_CFG80211_H_ */

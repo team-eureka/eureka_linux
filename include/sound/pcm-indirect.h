@@ -60,6 +60,15 @@ snd_pcm_indirect_playback_transfer(struct snd_pcm_substream *substream,
 		rec->appl_ptr = appl_ptr;
 	}
 	qsize = rec->hw_queue_size ? rec->hw_queue_size : rec->hw_buffer_size;
+
+	// Freewheeling mode: xrun check is disabled, typically done by dmix plugin.
+	// In this case, rec->sw_ready has to be assigned a non-zero value somehow as
+	// diff variable is always 0 because appl_ptr is not being updated. Period size
+	// seems like a good fit.
+	// TODO(ysoni) revisit this patch once alsa-devel-mailing-list gives a more generic advice
+	if (runtime->stop_threshold == runtime->boundary)
+		rec->sw_ready = snd_pcm_lib_period_bytes(substream);
+
 	while (rec->hw_ready < qsize && rec->sw_ready > 0) {
 		unsigned int hw_to_end = rec->hw_buffer_size - rec->hw_data;
 		unsigned int sw_to_end = rec->sw_buffer_size - rec->sw_data;

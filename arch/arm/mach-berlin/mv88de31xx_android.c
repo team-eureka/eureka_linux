@@ -35,8 +35,6 @@ static int bcb_fts_reboot_hook(struct notifier_block*, unsigned long, void*);
 static __initdata struct board_config {
     char *name;
     unsigned int board_rev;
-    unsigned long sdk_pool; /* how much memory is reserved, normal boot */
-    unsigned long sdk_pool_recovery;            /* ... recovery boot */
 
     /* MTD layout(s) in cmdlinepart format */
     const char *mtdparts;
@@ -57,13 +55,9 @@ static __initdata struct board_config {
     int (*reboot_notifier)(struct notifier_block*, unsigned long, void*);
 
 } boards[] = {
+#ifdef CONFIG_BERLIN2CD
     { .name = "bg2proto",
       .board_rev = 0,
-      /* TODO(kolla): Remove hardcoded system/sdk memory configs from
-       * kernel config and use board_config info.
-       */
-      .sdk_pool = 224 * ONE_MB,
-      .sdk_pool_recovery = 224 * ONE_MB,
       .default_root = "/dev/mtdblock:rootfs",
       .reboot_notifier = bcb_fts_reboot_hook,
 
@@ -95,11 +89,6 @@ static __initdata struct board_config {
     },
     { .name = "eureka-b1",
       .board_rev = 1,
-      /* TODO(kolla): Remove hardcoded system/sdk memory configs from
-       * kernel config and use board_config info.
-       */
-      .sdk_pool = 224 * ONE_MB,
-      .sdk_pool_recovery = 224 * ONE_MB,
       .default_root = "/dev/mtdblock:rootfs",
       .reboot_notifier = bcb_fts_reboot_hook,
 
@@ -127,11 +116,6 @@ static __initdata struct board_config {
     },
     { .name = "eureka-b2",
       .board_rev = 2,
-      /* TODO(kolla): Remove hardcoded system/sdk memory configs from
-       * kernel config and use board_config info.
-       */
-      .sdk_pool = 224 * ONE_MB,
-      .sdk_pool_recovery = 224 * ONE_MB,
       .default_root = "/dev/mtdblock:rootfs",
       .reboot_notifier = bcb_fts_reboot_hook,
 
@@ -159,11 +143,6 @@ static __initdata struct board_config {
     },
     { .name = "eureka-b3",
       .board_rev = 3,
-      /* TODO(kolla): Remove hardcoded system/sdk memory configs from
-       * kernel config and use board_config info.
-       */
-      .sdk_pool = 224 * ONE_MB,
-      .sdk_pool_recovery = 224 * ONE_MB,
       .default_root = "/dev/mtdblock:rootfs",
       .reboot_notifier = bcb_fts_reboot_hook,
 
@@ -189,6 +168,238 @@ static __initdata struct board_config {
       .mtdparts_ro = EUREKA_B3_MTDPARTS("ro"),
       .mtdparts_recovery = EUREKA_B3_MTDPARTS(""),
     },
+#elif defined(CONFIG_BERLIN2CDP)
+    { .name = "salami-proto",
+      .board_rev = 0,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+
+      /* 2G MLC, 4K pages, 1M block */
+      /*
+       * MTD partition name has to be shorter than 14 bytes due to
+       * limitation of Android init.
+       */
+#define SALAMI_PROTO_MTDPARTS(__RO__,__RRO__)          \
+      "mv_nand:"                                       \
+      "1M(block0)ro," /* flash config params */        \
+      "8M(bootloader)" __RO__ "," /* 8x copies */      \
+      "7M(fts)ro,"                                     \
+      "16M(kernel)"__RO__ ","                          \
+      "60M(recovery),"                                 \
+      "80M(backupsys),"                                \
+      "16M(factory_store)"                             \
+      "400M(rootfs)" __RRO__","                        \
+      "300M(cache),"                                   \
+      "1024M(userdata),"                               \
+      "8M@2040M(bbt)ro"
+      .mtdparts = SALAMI_PROTO_MTDPARTS("ro",""),
+      .mtdparts_ro = SALAMI_PROTO_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = SALAMI_PROTO_MTDPARTS("",""),
+    },
+    { .name = "lexx-b1",
+      .board_rev = 1,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+
+      /* 512MB SLC, 2K page size, 128K block size */
+      /*
+       * MTD partition name has to be shorter than 14 bytes due to
+       * limitation of Android init.
+       */
+#define LEXX_B1_MTDPARTS(__RO__,__RRO__)             \
+      "mv_nand:"                                       \
+      "128K(block0)ro," /* flash config params */      \
+      "1M(prebootloader)" __RO__ "," /* 8x copies */   \
+      "4M(TZ)" __RO__ ","                              \
+      "4M(TZ-B)" __RO__ ","                            \
+      "1M(postbootloader)" __RO__ ","                  \
+      "1M(postbootloader-B)" __RO__ ","                \
+      "8M(kernel)" __RO__ ","                          \
+      "110M(rootfs)" __RRO__","                        \
+      "332160K(cache),"                                \
+      "40M(userdata),"                                 \
+      "15M(recovery),"                                 \
+      "512K(fts)ro,"                                   \
+      "2M(factory_store)" __RO__ ","                   \
+      "1M@511M(bbt)ro"
+      .mtdparts = LEXX_B1_MTDPARTS("ro",""),
+      .mtdparts_ro = LEXX_B1_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = LEXX_B1_MTDPARTS("",""),
+    },
+    { .name = "lexx-b2",
+      .board_rev = 2,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+
+      /* 256MB SLC, 2K page size, 128K block size */
+      /*
+       * MTD partition name has to be shorter than 14 bytes due to
+       * limitation of Android init.
+       */
+#define LEXX_B2_MTDPARTS(__RO__,__RRO__)             \
+      "mv_nand:"                                       \
+      "128K(block0)ro," /* flash config params */      \
+      "1M(prebootloader)" __RO__ "," /* 8x copies */   \
+      "4M(TZ)" __RO__ ","                              \
+      "4M(TZ-B)" __RO__ ","                            \
+      "512K(postbootloader)" __RO__ ","                  \
+      "512K(postbootloader-B)" __RO__ ","                \
+      "8M(kernel)" __RO__ ","                          \
+      "105M(rootfs)" __RRO__","                        \
+      "117120K(cache),"                                \
+      "15M(recovery),"                                 \
+      "512K(fts)ro,"                                   \
+      "2M(factory_store)" ","                   \
+      "1M@255M(bbt)ro"
+      .mtdparts = LEXX_B2_MTDPARTS("ro",""),
+      .mtdparts_ro = LEXX_B2_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = LEXX_B2_MTDPARTS("",""),
+    },
+    { .name = "lexx-b3",
+      .board_rev = 3,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+      /* lexx-b3 uses same partition map as lexx-b2 */
+      .mtdparts = LEXX_B2_MTDPARTS("ro",""),
+      .mtdparts_ro = LEXX_B2_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = LEXX_B2_MTDPARTS("",""),
+    },
+    { .name = "lexx-b4",
+      .board_rev = 4,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+
+      /* 256MB SLC, 2K page size, 128K block size */
+      /*
+       * MTD partition name has to be shorter than 14 bytes due to
+       * limitation of Android init.
+       */
+#define LEXX_B4_MTDPARTS(__RO__,__RRO__)                  \
+      "mv_nand:"                                          \
+      "128K(block0)ro," /* flash config params */         \
+      "1M(prebootloader)" __RO__ "," /* 8x copies */      \
+      "2304K(TZ)" __RO__ ","                              \
+      "2304K(TZ-B)" __RO__ ","                            \
+      "512K(postbootloader)" __RO__ ","                   \
+      "512K(postbootloader-B)" __RO__ ","                 \
+      "4608K(kernel)" __RO__ ","                          \
+      "90M(rootfs)" __RRO__","                            \
+      "146944K(cache),"                                   \
+      "9728K(recovery),"                                  \
+      "1M(factory_store)" ","                             \
+      "512K(fts)ro,"                                      \
+      "384K(bbt)ro"
+      .mtdparts = LEXX_B4_MTDPARTS("ro",""),
+      .mtdparts_ro = LEXX_B4_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = LEXX_B4_MTDPARTS("",""),
+    },
+    { .name = "earth-b1",
+      .board_rev = 1,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+      /* earth-b1 uses same partition map as lexx-b2 */
+      .mtdparts = LEXX_B2_MTDPARTS("ro",""),
+      .mtdparts_ro = LEXX_B2_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = LEXX_B2_MTDPARTS("",""),
+    },
+    { .name = "earth-b2",
+      .board_rev = 2,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+      /* earth-b2 uses same partition map as lexx-b2 */
+      .mtdparts = LEXX_B2_MTDPARTS("ro",""),
+      .mtdparts_ro = LEXX_B2_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = LEXX_B2_MTDPARTS("",""),
+    },
+    { .name = "earth-b3",
+      .board_rev = 3,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+
+      /* 256MB SLC, 2K page size, 128K block size */
+      /*
+       * MTD partition name has to be shorter than 14 bytes due to
+       * limitation of Android init.
+       */
+#define EARTH_B3_MTDPARTS(__RO__,__RRO__)                 \
+      "mv_nand:"                                          \
+      "128K(block0)ro," /* flash config params */         \
+      "1M(prebootloader)" __RO__ "," /* 8x copies */      \
+      "4M(TZ)" __RO__ ","                                 \
+      "4M(TZ-B)" __RO__ ","                               \
+      "640K(postbootloader)" __RO__ ","                   \
+      "640K(postbootloader-B)" __RO__ ","                 \
+      "8M(kernel)" __RO__ ","                             \
+      "105M(rootfs)" __RRO__","                           \
+      "117120K(cache),"                                   \
+      "15104K(recovery),"                                 \
+      "512K(fts)ro,"                                      \
+      "2M(factory_store)" ","                             \
+      "1M@255M(bbt)ro"
+      .mtdparts = EARTH_B3_MTDPARTS("ro",""),
+      .mtdparts_ro = EARTH_B3_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = EARTH_B3_MTDPARTS("",""),
+    },
+    { .name = "earth-b4",
+      .board_rev = 4,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+
+      /* 256MB SLC, 2K page size, 128K block size */
+      /*
+       * MTD partition name has to be shorter than 14 bytes due to
+       * limitation of Android init.
+       */
+#define EARTH_B4_MTDPARTS(__RO__,__RRO__)                 \
+      "mv_nand:"                                          \
+      "128K(block0)ro," /* flash config params */         \
+      "1M(prebootloader)" __RO__ "," /* 8x copies */      \
+      "2304K(TZ)" __RO__ ","                              \
+      "2304K(TZ-B)" __RO__ ","                            \
+      "640K(postbootloader)" __RO__ ","                   \
+      "640K(postbootloader-B)" __RO__ ","                 \
+      "4608K(kernel)" __RO__ ","                          \
+      "90M(rootfs)" __RRO__","                            \
+      "146944K(cache),"                                   \
+      "9472K(recovery),"                                  \
+      "1M(factory_store)" ","                             \
+      "512K(fts)ro,"                                      \
+      "384K(bbt)ro"
+      .mtdparts = EARTH_B4_MTDPARTS("ro",""),
+      .mtdparts_ro = EARTH_B4_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = EARTH_B4_MTDPARTS("",""),
+    },
+    { .name = "hendrix-b1",
+      .board_rev = 1,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+      /* hendrix-b1 uses same partition map as lexx-b2 */
+      .mtdparts = LEXX_B2_MTDPARTS("ro",""),
+      .mtdparts_ro = LEXX_B2_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = LEXX_B2_MTDPARTS("",""),
+    },
+    { .name = "hendrix-b3",
+      .board_rev = 3,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+      /* hendrix-b3 uses same partition map as earth-b3 */
+      .mtdparts = EARTH_B3_MTDPARTS("ro",""),
+      .mtdparts_ro = EARTH_B3_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = EARTH_B3_MTDPARTS("",""),
+    },
+    { .name = "hendrix-b4",
+      .board_rev = 4,
+      .default_root = "/dev/mtdblock:rootfs",
+      .reboot_notifier = bcb_fts_reboot_hook,
+
+      /* TODO(mtraver): If we decide to change hendrix rootfs size,
+       * make a new HENDRIX_B4_MTDPARTS. */
+      /* hendrix-b4 uses same partition map as earth-b4 */
+      .mtdparts = EARTH_B4_MTDPARTS("ro",""),
+      .mtdparts_ro = EARTH_B4_MTDPARTS("ro","ro"),
+      .mtdparts_recovery = EARTH_B4_MTDPARTS("",""),
+    },
+#endif /* CONFIG_BERLIN2CD */
 };
 
 /* This is what we will use if nothing has been passed by bootloader

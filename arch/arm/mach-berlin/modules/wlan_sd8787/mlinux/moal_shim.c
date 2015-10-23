@@ -1904,3 +1904,24 @@ moal_tcp_ack_tx_ind(IN t_void * pmoal_handle, IN pmlan_buffer pmbuf)
 	pmbuf->flags &= ~MLAN_BUF_FLAG_TCP_ACK;
 	woal_tcp_ack_tx_indication(phandle->priv[pmbuf->bss_index], pmbuf);
 }
+
+/**
+ *  @brief This function save the histogram data
+ *
+ *  @param pmoal_handle     A pointer to moal_private structure
+ *  @param bss_index        BSS index
+ *  @param rx_rate          rx rate index
+ *  @param snr              snr
+ *  @param nflr             noise floor
+ *
+ *  @return                 N/A
+ */
+t_void moal_hist_data_add(IN t_void *pmoal_handle, IN t_u32 bss_index, IN t_u8 rx_rate, IN t_s8 snr, IN t_s8 nflr, IN t_u8 antenna)
+{
+    moal_private *priv = NULL;
+    priv = woal_bss_index_to_priv(pmoal_handle, bss_index);
+    if(antenna >= priv->phandle->histogram_table_num)
+        antenna = 0;
+    if(priv && priv->hist_data[antenna])
+        woal_hist_data_add(priv, rx_rate, snr, nflr, antenna);
+}

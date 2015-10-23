@@ -285,12 +285,15 @@ err:
 
 static const struct of_device_id berlin_dt_irq_match[] = {
 	{ .compatible = "arm,cortex-a9-gic", .data = gic_of_init, },
+	{ .compatible = "arm,cortex-a15-gic", .data = gic_of_init, },
 	{ .compatible = "snps,dw-apb-ictl", .data = apb_ictl_init, },
 	{},
 };
 
 void __init berlin_init_irq(void)
 {
+#ifndef CONFIG_BERLIN2CDP
 	l2x0_of_init(0x70c00000, 0xfeffffff);
+#endif
 	of_irq_init(berlin_dt_irq_match);
 }

@@ -1534,6 +1534,11 @@ static int __regulatory_hint(struct wiphy *wiphy,
 		}
 		intersect = true;
 	} else if (r) {
+		/* Save alpha2 if initiated from user in case the request is dropped. */
+		if (pending_request->initiator == NL80211_REGDOM_SET_BY_USER) {
+			user_alpha2[0] = pending_request->alpha2[0];
+			user_alpha2[1] = pending_request->alpha2[1];
+		}
 		/*
 		 * If the regulatory domain being requested by the
 		 * driver has already been set just copy it to the

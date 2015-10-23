@@ -22,19 +22,26 @@
 #ifndef _MOAL_STA_CFG80211_H_
 #define _MOAL_STA_CFG80211_H_
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+#define IEEE80211_CHAN_PASSIVE_SCAN IEEE80211_CHAN_NO_IR
+#define IEEE80211_CHAN_NO_IBSS IEEE80211_CHAN_NO_IR
+#endif
+
 /** Convert RSSI signal strength from dBm to mBm (100*dBm) */
 #define RSSI_DBM_TO_MDM(x)          ((x) * 100)
 
 mlan_status woal_register_sta_cfg80211(struct net_device *dev, t_u8 bss_type);
 
 mlan_status
-woal_cfg80211_set_key(moal_private * priv, t_u8 is_enable_wep,
-		      t_u32 cipher, const t_u8 * key, int key_len,
-		      const t_u8 * seq, int seq_len, t_u8 key_index,
-		      const t_u8 * addr, int disable);
+
+woal_cfg80211_set_key(moal_private *priv, t_u8 is_enable_wep,
+		      t_u32 cipher, const t_u8 *key, int key_len,
+		      const t_u8 *seq, int seq_len, t_u8 key_index,
+		      const t_u8 *addr, int disable, t_u8 wait_option);
 
 mlan_status
-woal_cfg80211_set_wep_keys(moal_private * priv, const t_u8 * key, int key_len,
-			   t_u8 index);
+
+woal_cfg80211_set_wep_keys(moal_private *priv, const t_u8 *key, int key_len,
+			   t_u8 index, t_u8 wait_option);
 
 #endif /* _MOAL_STA_CFG80211_H_ */

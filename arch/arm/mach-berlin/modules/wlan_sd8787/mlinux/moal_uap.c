@@ -2394,8 +2394,8 @@ woal_uap_bss_ctrl(moal_private * priv, t_u8 wait_option, int data)
 	req->req_id = MLAN_IOCTL_BSS;
 	req->action = MLAN_ACT_SET;
 
-	status = woal_request_ioctl(priv, req, MOAL_IOCTL_WAIT);
-	if (status != MLAN_STATUS_SUCCESS) {
+	status = woal_request_ioctl(priv, req, wait_option);
+	if (status == MLAN_STATUS_FAILURE) {
 		ret = -EFAULT;
 		goto done;
 	}

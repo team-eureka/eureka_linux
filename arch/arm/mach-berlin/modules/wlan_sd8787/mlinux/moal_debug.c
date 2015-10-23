@@ -425,189 +425,228 @@ static struct debug_data uap_items[] = {
 };
 #endif /* UAP_SUPPORT */
 
-/* Histogram support*/
-struct _hgm_seq_data {
-	int   histDataSize;
-	int   pos;
-	int   numHgmSamples;
-	char  *pHgmData;
-};
-
-static struct _hgm_seq_data hgm_seq_data;
-static unsigned int woal_debug_get_uint(char *pBuf);
-
-static void
-hgm_seq_init_globals()
+/**
+ *  @brief This function reset histogram data
+ *
+ *  @param priv 		A pointer to moal_private
+ *
+ *  @return   N/A
+ */
+void woal_hist_do_reset(void *data)
 {
-	int i;
-	ENTER();
+	hgm_data *phist_data = (hgm_data *)data;
+	int ix;
 
-	if (!hgm_seq_data.pHgmData){
-		hgm_seq_data.histDataSize = (RX_RATE_MAX+SNR_MAX+NOISE_FLR_MAX+SIG_STRENGTH_MAX) * sizeof(unsigned int);
-		hgm_seq_data.pHgmData = (char *) kmalloc(hgm_seq_data.histDataSize, GFP_KERNEL);
-
-		if (!hgm_seq_data.pHgmData){
-			printk(KERN_ERR "hgm_seq_init_globals: Could not allocate memory\n");
-			LEAVE();
-			return;
-		}
-
-		for (i = 0; i < hgm_seq_data.histDataSize; i++)
-			hgm_seq_data.pHgmData[i] = 0;
-	}
-
-	LEAVE();
-	return;
+	if(!phist_data) return;
+	atomic_set(&(phist_data->num_samples), 0);
+	for (ix = 0; ix < RX_RATE_MAX; ix++) atomic_set(&(phist_data->rx_rate[ix]), 0);
+	for (ix = 0; ix < SNR_MAX; ix++) atomic_set(&(phist_data->snr[ix]), 0);
+	for (ix = 0; ix < NOISE_FLR_MAX; ix++) atomic_set(&(phist_data->noise_flr[ix]), 0);
+	for (ix = 0; ix < SIG_STRENGTH_MAX; ix++) atomic_set(&(phist_data->sig_str[ix]), 0);
 }
 
-static void *
-hgm_seq_start(struct seq_file *s, loff_t *pos)
+/**
+ *  @brief This function reset all histogram data
+ *
+ *  @param priv 		A pointer to moal_private
+ *
+ *  @return   N/A
+ */
+void woal_hist_data_reset(moal_private *priv)
 {
+	int i = 0;
+	for(i = 0; i < priv->phandle->histogram_table_num; i++)
+		woal_hist_do_reset(priv->hist_data[i]);
+}
 
-	ENTER();
+/**
+ *  @brief This function reset histogram data according to antenna
+ *
+ *  @param priv 		A pointer to moal_private
+ *
+ *  @return   N/A
+ */
+void woal_hist_reset_table(moal_private *priv, t_u8 antenna)
+{
+	hgm_data *phist_data = priv->hist_data[antenna];
 
-	if (unlikely(!hgm_seq_data.pHgmData)){
-		LEAVE();
-		return NULL;
-	}
-	else if (0 == *pos) {
-		if (0 != mlan_hist_data_get( hgm_seq_data.pHgmData, &(hgm_seq_data.numHgmSamples) )){
-			LEAVE();
-			return NULL;
-		}
-	}
+	woal_hist_do_reset(phist_data);
+}
 
-	hgm_seq_data.pos = *pos;
-	if ((*pos) >= hgm_seq_data.histDataSize) {     // are we done?
-		LEAVE();
-		return NULL;
-	}
+/**
+ *  @brief This function set histogram data
+ *
+ *  @param priv 		A pointer to moal_private
+ *  @param rx_rate      rx rate
+ *  @param snr			snr
+ *  @param nflr			NF
+ *
+ *  @return   N/A
+ */
+static void woal_hist_data_set(moal_private *priv, t_u8 rx_rate, t_s8 snr, t_s8 nflr, t_u8 antenna)
+{
+	hgm_data *phist_data = NULL;
 
-	LEAVE();
-	return (void *) &hgm_seq_data;
+	phist_data = priv->hist_data[antenna];
+
+	atomic_inc(&(phist_data->num_samples));
+	atomic_inc(&(phist_data->rx_rate[rx_rate]));
+	atomic_inc(&(phist_data->snr[snr]));
+	atomic_inc(&(phist_data->noise_flr[128 + nflr]));
+	atomic_inc(&(phist_data->sig_str[nflr - snr]));
 }
 
 
-static int
-hgm_seq_show(struct seq_file *s, void *v)
+/**
+ *  @brief This function add histogram data
+ *
+ *  @param priv 		A pointer to moal_private
+ *  @param rx_rate      rx rate
+ *  @param snr			snr
+ *  @param nflr			NF
+ *
+ *  @return   N/A
+ */
+void woal_hist_data_add(moal_private *priv, t_u8 rx_rate, t_s8 snr, t_s8 nflr, t_u8 antenna)
 {
-	struct _hgm_seq_data *hgm = (struct _hgm_seq_data *) v;
-	int pos;
-	int rx_max = RX_RATE_MAX;
-	int snr_max = rx_max + SNR_MAX;
-	int nflr_max = snr_max + NOISE_FLR_MAX;
-	int sigs_max = nflr_max + SIG_STRENGTH_MAX;
-	int i,nTemp;
-	struct debug_data_priv *pdbg_data_priv;
-	struct debug_data *pdbg_data;
-	moal_private *pmoal_priv=NULL;
+	hgm_data *phist_data = NULL;
+	unsigned long curr_size;
 
-	if (s){
-		pdbg_data_priv = (struct debug_data_priv *)s->private;
-		pdbg_data = pdbg_data_priv->items;
-		pmoal_priv =  pdbg_data_priv->priv;
+	if((antenna + 1) > priv->phandle->histogram_table_num)
+		antenna = 0;
+	phist_data = priv->hist_data[antenna];
+	curr_size = atomic_read(&(phist_data->num_samples));
+	if (curr_size > HIST_MAX_SAMPLES)
+		woal_hist_reset_table(priv, antenna);
+	woal_hist_data_set(priv, rx_rate, snr, nflr, antenna);
+}
+
+#define MAX_MCS_NUM_SUPP    16
+#define MAX_MCS_NUM_AC    10
+#define RATE_INDEX_MCS0   12
+
+/**
+ *  @brief histogram info in proc
+ *
+ *  @param sfp     pointer to seq_file structure
+ *  @param data
+ *
+ *  @return        Number of output data or MLAN_STATUS_FAILURE
+ */
+static int woal_histogram_info(struct seq_file *sfp, void *data)
+{
+	hgm_data *phist_data = (hgm_data *)data;
+	int i = 0;
+	int value = 0;
+	t_bool sgi_enable = 0;
+	t_u8  bw = 0;
+	t_u8  mcs_index = 0;
+
+	ENTER();
+	if (MODULE_GET == 0) {
+		LEAVE();
+		return -EFAULT;
 	}
-	else
-		PRINTM(MERROR,"hgm_seq_show(): s == NULL!\n");
 
-
-	pos = hgm->pos;
-
-	if (unlikely(pos == 0)){
-		// Position 0, print banner, num items and first entry.
-		seq_printf(s, "total samples = %d \n", hgm->numHgmSamples);
-		seq_printf(s, "rx rates (in Mbps): 0=1M   1=2M   2=5.5M  3=11M   4=6M  5=9M  6=12M\n");
-		seq_printf(s, "                    7=18M  8=24M  9=36M  10=48M  11=54M   12-19 == MCS0-7(BW20)\n\n");
-
-		i = woal_debug_get_uint((char *) (pos + hgm->pHgmData));
-		if (i){
-			seq_printf(s, "rx_rate[%02d] = %d\n", pos, i);
+	seq_printf(sfp, "total samples = %d \n", atomic_read(&(phist_data->num_samples)));
+	seq_printf(sfp, "rx rates (in Mbps):\n");
+	seq_printf(sfp, "\t0-3:     B-MCS  0-3\n");
+	seq_printf(sfp, "\t4-11:    G-MCS  0-7\n");
+	seq_printf(sfp, "\t12-27:   N-MCS  0-15(BW20)             28-43:   N-MCS  0-15(BW40)\n");
+	seq_printf(sfp, "\t44-59:   N-MCS  0-15(BW20:SGI)         60-75:   N-MCS  0-15(BW40:SGI)\n");
+	seq_printf(sfp, "\n");
+	for (i = 0; i < RX_RATE_MAX; i++){
+		value = atomic_read(&(phist_data->rx_rate[i]));
+		if(value) {
+			if (i <= 11)
+				seq_printf(sfp, "rx_rate[%03d] = %d\n", i, value);
+			else if (i <= 75) {
+				sgi_enable = (i-12)/(MAX_MCS_NUM_SUPP*2);//0:LGI, 1:SGI
+				bw = ((i-12)%(MAX_MCS_NUM_SUPP*2))/MAX_MCS_NUM_SUPP;//0:20MHz, 1:40MHz
+				mcs_index = (i-12)%MAX_MCS_NUM_SUPP;
+				seq_printf(sfp,
+						"rx_rate[%03d] = %d (MCS:%d HT BW:%dMHz%s)\n",
+						i, value, mcs_index, (1 << bw) * 20,
+						sgi_enable ? " SGI" : "");
+			}
 		}
 	}
-	else if (pos < rx_max*sizeof(unsigned int)){
-		i = woal_debug_get_uint((char *) (pos + hgm->pHgmData));
-		if (i){
-			seq_printf(s, "rx_rate[%02d] = %d\n", pos/sizeof(unsigned int), i);
-		}
+	for (i = 0; i < SNR_MAX; i++){
+		value =  atomic_read(&(phist_data->snr[i]));
+		if(value)
+			seq_printf(sfp, "snr[%02ddB] = %d\n", i, value);
 	}
-	else if (pos < snr_max*sizeof(unsigned int)){
-		i = woal_debug_get_uint((char *) (pos + hgm->pHgmData));
-		if (i){
-			seq_printf(s, "snr[%02ddB] = %d\n", (pos/sizeof(unsigned int)) - rx_max, i);
-		}
+	for (i = 0; i < NOISE_FLR_MAX; i++){
+		value = atomic_read(&(phist_data->noise_flr[i]));
+		if(value)
+			seq_printf(sfp, "noise_flr[-%02ddBm] = %d\n", (int)(i-128), value);
 	}
-	else if (pos < nflr_max*sizeof(unsigned int)){
-		i = woal_debug_get_uint((char *) (pos + hgm->pHgmData));
-		if (i){
-			seq_printf(s, "noise_flr[-%02ddBm] = %d\n", ((pos/sizeof(unsigned int))-snr_max)-128, i);
-		}
-	}
-	else if (pos < sigs_max*sizeof(unsigned int)){
-		i = woal_debug_get_uint((char *) (pos + hgm->pHgmData));
-		if (i){
-			seq_printf(s, "sig_strength[-%02ddBm] = %d\n", (pos/sizeof(unsigned int)) - nflr_max, i);
-		}
-	}
-	else{
-		return 0;
+	for (i = 0; i < SIG_STRENGTH_MAX; i++){
+		value = atomic_read(&(phist_data->sig_str[i]));
+		if(value)
+			seq_printf(sfp, "sig_strength[-%02ddBm] = %d\n", i, value);
 	}
 
+	MODULE_PUT;
+	LEAVE();
 	return 0;
 }
 
-static void *
-hgm_seq_next(struct seq_file *s, void *v, loff_t *pos)
+/**
+ *  @brief Proc read function for histogram
+ *
+ *  @param sfp     pointer to seq_file structure
+ *  @param data
+ *
+ *  @return        Number of output data or MLAN_STATUS_FAILURE
+ */
+static int woal_histogram_read(struct seq_file *sfp, void *data)
 {
-	struct _hgm_seq_data *hgm = (struct _hgm_seq_data *) v;
+	wlan_hist_proc_data * hist_data = (wlan_hist_proc_data *)sfp->private;
+	moal_private *priv = (moal_private *)hist_data->priv;
 
-	if ((*pos) >= hgm->histDataSize)     // we are done
-	   return NULL;
-
-	(*pos) += sizeof(unsigned int);                // increase my position counter
-	hgm->pos = *pos;
-
-	return v;
-}
-
-static void
-hgm_seq_stop(struct seq_file *s, void *v)
-{
-	return;
-}
-
-static struct seq_operations hgm_seq_ops = {
-	.start = hgm_seq_start,
-	.next  = hgm_seq_next,
-	.stop  = hgm_seq_stop,
-	.show  = hgm_seq_show
-};
-
-static int hgm_seq_open(struct inode *inode, struct file *file)
-{
-	int ret;
-	ret =  seq_open(file, &hgm_seq_ops);
-	if (!ret){
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-		((struct seq_file *)file->private_data)->private = PDE_DATA(inode);
-#else
-		((struct seq_file *)file->private_data)->private = PDE(inode)->data;
-#endif
+	ENTER();
+	if (!priv){
+		LEAVE();
+		return -EFAULT;
 	}
-	return ret;
+
+	if(!priv->hist_data){
+		LEAVE();
+		return -EFAULT;
+	}
+	if(hist_data->ant_idx < priv->phandle->histogram_table_num)
+		woal_histogram_info(sfp,priv->hist_data[hist_data->ant_idx]);
+
+	LEAVE();
+	return 0;
 }
 
-static unsigned int woal_debug_get_uint(char *pBuf)
+static int woal_histogram_proc_open(struct inode *inode, struct file *file)
 {
-	unsigned int n;
-	mlan_memcpy((void *) &n, (void *) pBuf, sizeof(unsigned int));
-	return n;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+	return single_open(file, woal_histogram_read, PDE_DATA(inode));
+#else
+	return single_open(file, woal_histogram_read, PDE(inode)->data);
+#endif
 }
 
-static int
-woal_debug_write_histogram(struct file *filp, const char __user *buf,
-	size_t count, loff_t *ppos)
+/**
+ *  @brief Proc write function for histogram
+ *
+ *  @param f       file pointer
+ *  @param buf     pointer to data buffer
+ *  @param count   data number to write
+ *  @param off     Offset
+ *
+ *  @return        number of data
+ */
+static ssize_t woal_histogram_write(struct file *f, const char __user *buf, size_t count, loff_t *off)
 {
-	mlan_hist_data_clear();
+	struct seq_file *sfp = f->private_data;
+	wlan_hist_proc_data * hist_data = (wlan_hist_proc_data *)sfp->private;
+	moal_private *priv = (moal_private *)hist_data->priv;
+	woal_hist_reset_table(priv,hist_data->ant_idx);
 	return count;
 }
 
@@ -1382,15 +1421,6 @@ static const struct file_operations debug_proc_fops = {
 	.write = woal_debug_write,
 };
 
-static struct file_operations hgm_file_ops = {
-	.owner   = THIS_MODULE,
-	.open    = hgm_seq_open,
-	.write   = woal_debug_write_histogram,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release
-};
-
 static struct file_operations peers_file_ops = {
 	.owner   = THIS_MODULE,
 	.open    = peers_seq_open,
@@ -1409,6 +1439,14 @@ static const struct file_operations log_proc_fops = {
 
 };
 
+static const struct file_operations histogram_proc_fops = {
+    .owner      = THIS_MODULE,
+    .open       = woal_histogram_proc_open,
+    .read       = seq_read,
+    .llseek     = seq_lseek,
+    .release    = single_release,
+    .write      = woal_histogram_write,
+};
 /********************************************************
 		Global Functions
 ********************************************************/
@@ -1423,10 +1461,11 @@ void
 woal_debug_entry(moal_private * priv)
 {
 	struct proc_dir_entry *r;
-    struct proc_dir_entry *r2;
-    struct proc_dir_entry *r3;
+	struct proc_dir_entry *r2;
+	struct proc_dir_entry *r3;
 	int i;
 	int handle_items;
+	char hist_entry[50];
 
 	ENTER();
 
@@ -1440,24 +1479,23 @@ woal_debug_entry(moal_private * priv)
 			(struct debug_data *)kmalloc(sizeof(items), GFP_KERNEL);
 		if (!priv->items_priv.items) {
 			PRINTM(MERROR,
-			       "Failed to allocate memory for debug data\n");
+					"Failed to allocate memory for debug data\n");
 			LEAVE();
 			return;
 		}
 		memcpy(priv->items_priv.items, items, sizeof(items));
 		priv->items_priv.num_of_items = ARRAY_SIZE(items);
-        priv->items_priv_hist.num_of_items = 0;
-        priv->items_priv_peers.num_of_items = 0;
+		priv->items_priv_peers.num_of_items = 0;
 	}
 #endif
 #ifdef UAP_SUPPORT
 	if (GET_BSS_ROLE(priv) == MLAN_BSS_ROLE_UAP) {
 		priv->items_priv.items =
 			(struct debug_data *)kmalloc(sizeof(uap_items),
-						     GFP_KERNEL);
+					GFP_KERNEL);
 		if (!priv->items_priv.items) {
 			PRINTM(MERROR,
-			       "Failed to allocate memory for debug data\n");
+					"Failed to allocate memory for debug data\n");
 			LEAVE();
 			return;
 		}
@@ -1467,8 +1505,7 @@ woal_debug_entry(moal_private * priv)
 #endif
 
 	priv->items_priv.priv = priv;
-    priv->items_priv_hist.priv = priv;
-    priv->items_priv_peers.priv = priv;
+	priv->items_priv_peers.priv = priv;
 	handle_items = 9;
 #ifdef SDIO_MMC_DEBUG
 	handle_items += 2;
@@ -1478,15 +1515,15 @@ woal_debug_entry(moal_private * priv)
 #endif
 	for (i = 1; i <= handle_items; i++)
 		priv->items_priv.items[priv->items_priv.num_of_items -
-				       i].addr += (t_ptr) (priv->phandle);
+			i].addr += (t_ptr) (priv->phandle);
 
 	/* Create proc entry */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
 	r = proc_create_data("debug", 0644, priv->proc_entry, &debug_proc_fops,
-			     &priv->items_priv);
+			&priv->items_priv);
 	if (r == NULL)
 #else
-	r = create_proc_entry("debug", 0644, priv->proc_entry);
+		r = create_proc_entry("debug", 0644, priv->proc_entry);
 	if (r) {
 		r->data = &priv->items_priv;
 		r->proc_fops = &debug_proc_fops;
@@ -1498,61 +1535,75 @@ woal_debug_entry(moal_private * priv)
 		return;
 	}
 
-	/* Initialize hgm data structure */
-	hgm_seq_init_globals();
-
-	/* Create proc entry for driver histogram data */
-    r2 = create_proc_entry("histogram", 0664, priv->proc_entry);
-    if (r2 == NULL) {
-        LEAVE();
-        return;
-    }
-    r2->data = &priv->items_priv_hist;
+	r3 = create_proc_entry("peers", 0664, priv->proc_entry);
+	if (r3 == NULL) {
+		LEAVE();
+		return;
+	}
+	r3->data = &priv->items_priv_peers;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
-    r2->owner = THIS_MODULE;
+	r3->owner = THIS_MODULE;
 #endif
-    r2->proc_fops = &hgm_file_ops;
-    r2->uid = 0;
-    r2->gid = 1008; // wifi group
-    mlan_hist_data_clear();
+	r3->proc_fops = &peers_file_ops;
+	r3->uid = 0;
+	r3->gid = 1008; // wifi group
 
-    r3 = create_proc_entry("peers", 0664, priv->proc_entry);
-    if (r3 == NULL) {
-        LEAVE();
-        return;
-    }
-    r3->data = &priv->items_priv_peers;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
-    r3->owner = THIS_MODULE;
-#endif
-    r3->proc_fops = &peers_file_ops;
-    r3->uid = 0;
-    r3->gid = 1008; // wifi group
+	//Register the peer mgmt frame callback function.
+	mlan_register_peer_mac_cb((MOAL_PEER_MGMT_FRAME_CB) &woal_peer_mgmt_frame_callback);
+	woal_peer_list_size = 0;
+	sema_init(&woal_peer_sem,1);
 
-    //Register the peer mgmt frame callback function.
-    mlan_register_peer_mac_cb((MOAL_PEER_MGMT_FRAME_CB) &woal_peer_mgmt_frame_callback);
-    woal_peer_list_size = 0;
-    sema_init(&woal_peer_sem,1);
-
-    if(priv->bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP){
+	if(priv->bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP){
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
-        r = proc_create_data("log", 0644, priv->proc_entry, &log_proc_fops, priv);
-        if (r == NULL)
+		r = proc_create_data("log", 0644, priv->proc_entry, &log_proc_fops, priv);
+		if (r == NULL)
 #else
-        r = create_proc_entry("log", 0644, priv->proc_entry);
-        if (r) {
-            r->data         = priv;
-            r->proc_fops    = &log_proc_fops;
-        } else
+			r = create_proc_entry("log", 0644, priv->proc_entry);
+		if (r) {
+			r->data         = priv;
+			r->proc_fops    = &log_proc_fops;
+		} else
 #endif
-        {
-            PRINTM(MMSG,"Fail to create proc log entry\n");
-	LEAVE();
-            return;
-        }
-    }
+		{
+			PRINTM(MMSG,"Fail to create proc log entry\n");
+			LEAVE();
+			return;
+		}
+	}
+	
+	if(priv->bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP){
+		priv->hist_entry = proc_mkdir("histogram", priv->proc_entry);
+		if(!priv->hist_entry){
+			PRINTM(MERROR, "Fail to mkdir histogram!\n");
+			LEAVE();
+			return;
+		}
+		for (i = 0; i < priv->phandle->histogram_table_num; i++){
+			priv->hist_proc[i].ant_idx = i;
+			priv->hist_proc[i].priv = priv;
+			snprintf(hist_entry, sizeof(hist_entry), "wlan-ant%d",i);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
+			r = proc_create_data(hist_entry, 0664, priv->hist_entry, &histogram_proc_fops, &priv->hist_proc[i]);
+			if (r == NULL)
+#else
+				r = create_proc_entry("histogram", 0664, priv->hist_entry);
+			if (r) {
+				r->data         = &priv->hist_proc[i];
+				r->proc_fops    = &histogram_proc_fops;
+			} else
+#endif
+			{
+				PRINTM(MMSG,"Fail to create proc histogram entry %s\n", hist_entry);
+				LEAVE();
+				return;
+			}
+			r->uid = 0;
+			r->gid = 1008; // wifi group
+		}
+	}
 
-    LEAVE();
+
+	LEAVE();
 }
 
 /**
@@ -1565,16 +1616,24 @@ woal_debug_entry(moal_private * priv)
 void
 woal_debug_remove(moal_private * priv)
 {
+	char hist_entry[50];
+	int i;
 	ENTER();
 
 	kfree(priv->items_priv.items);
 	/* Remove proc entry */
 	remove_proc_entry("debug", priv->proc_entry);
-	remove_proc_entry("histogram", priv->proc_entry);
+	if(priv->bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP){
+		for (i = 0; i < priv->phandle->histogram_table_num; i++){
+			snprintf(hist_entry, sizeof(hist_entry), "wlan-ant%d",i);
+			remove_proc_entry(hist_entry, priv->hist_entry);
+		}
+		remove_proc_entry("histogram", priv->proc_entry);
+	}
 	woal_peer_delete_peer_list();
 	remove_proc_entry("peers", priv->proc_entry);
-    if(priv->bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP)
-        remove_proc_entry("log", priv->proc_entry);
+	if(priv->bss_type == MLAN_BSS_TYPE_STA || priv->bss_type == MLAN_BSS_TYPE_UAP)
+		remove_proc_entry("log", priv->proc_entry);
 
 	LEAVE();
 }

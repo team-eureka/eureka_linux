@@ -1,0 +1,157 @@
+/*
+ * MARVELL BERLIN2CT Dongle board device tree source
+ *
+ * Copyright (c) 2013 Marvell International Ltd.
+ *		http://www.marvell.com
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+/dts-v1/;
+/include/ "berlin2cd-common.dtsi"
+
+/ {
+	model = "MARVELL BG2CD Dongle board based on BERLIN2CD";
+	compatible = "marvell,berlin2cd-dongle", "marvell,berlin2cd";
+
+	memory {
+		name = "memory";
+		device_type = "memory";
+		linux,usable-memory = <0x00600000 0x13200000>;
+	};
+
+	soc {
+		usb@F7ED0000 {
+				status = "disabled";
+		};
+
+		amp {
+			compatible = "mrvl,berlin-amp";
+			interrupts = <0 19 4  0 0 4  0 1 4  0 25 4  0 2 4>;
+			cec{
+				compatible = "mrvl,berlin-cec";
+				interrupt-parent = <&sm_ictl>;
+				interrupts = <16>;
+			};
+		};
+
+		shm@29000000 {
+			compatible = "mrvl,berlin-shm";
+			reg = <0x13800000 0x0C000000>, <0x1F800000 0x00800000>;
+		};
+
+		gpio0: apbgpio@F7E80400 {
+			compatible = "snps,dw-apb-gpio";
+			dev_name = "gpio_soc_0";
+			reg = <0xF7E80400 0x400>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			banka: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-bank";
+				gpio-controller;
+				reg = <0>;
+				#gpio-cells = <2>;
+				nr-gpio = <8>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&apb_ictl>;
+				interrupts = <0>;
+			};
+		};
+
+		gpio1: apbgpio@F7E80800 {
+			compatible = "snps,dw-apb-gpio";
+			dev_name = "gpio_soc_1";
+			reg = <0xF7E80800 0x400>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			bankb: gpio-controller@1 {
+				compatible = "snps,dw-apb-gpio-bank";
+				gpio-controller;
+				reg = <0>;
+				#gpio-cells = <2>;
+				nr-gpio = <8>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&apb_ictl>;
+				interrupts = <1>;
+			};
+		};
+
+		gpio2: apbgpio@F7E80C00 {
+			compatible = "snps,dw-apb-gpio";
+			dev_name = "gpio_soc_2";
+			reg = <0xF7E80C00 0x400>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			bankc: gpio-controller@2 {
+				compatible = "snps,dw-apb-gpio-bank";
+				gpio-controller;
+				reg = <0>;
+				#gpio-cells = <2>;
+				nr-gpio = <8>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&apb_ictl>;
+				interrupts = <2>;
+			};
+		};
+
+		gpio3: apbgpio@F7E81000 {
+			compatible = "snps,dw-apb-gpio";
+			dev_name = "gpio_soc_3";
+			reg = <0xF7E81000 0x400>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			bankd: gpio-controller@3 {
+				compatible = "snps,dw-apb-gpio-bank";
+				gpio-controller;
+				reg = <0>;
+				#gpio-cells = <2>;
+				nr-gpio = <8>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&apb_ictl>;
+				interrupts = <3>;
+			};
+		};
+
+		gpio4: apbgpio@F7FCC000 {
+			compatible = "snps,dw-apb-gpio";
+			dev_name = "gpio_sm_0";
+			reg = <0xF7FCC000 0x400>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			banke: gpio-controller@4 {
+				compatible = "snps,dw-apb-gpio-bank";
+				gpio-controller;
+				reg = <0>;
+				#gpio-cells = <2>;
+				nr-gpio = <8>;
+			};
+		};
+
+		gpio5: apbgpio@F7FC5000 {
+			compatible = "snps,dw-apb-gpio";
+			dev_name = "gpio_sm_1";
+			reg = <0xF7FC5000 0x400>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			bankf: gpio-controller@5 {
+				compatible = "snps,dw-apb-gpio-bank";
+				gpio-controller;
+				reg = <0>;
+				#gpio-cells = <2>;
+				nr-gpio = <8>;
+			};
+		};
+	};
+};

@@ -56,7 +56,6 @@
 #include <asm/system.h>
 
 
-#define CONFIG_BERLIN_ASIC
 #ifdef CONFIG_BERLIN_ASIC
 #define PHY_ADDR 0x00
 #define PHY_NEGOTIATION_WORKAROUND
@@ -468,7 +467,11 @@ static void phy_reset(struct geth_private *mp)
 static inline void ethSetTxClock(int clock_25_Mhz)
 {
 	unsigned int val;
+#ifdef CONFIG_BERLIN2CDP
+	void __iomem *reg = IOMEM(0xF7FCD040);
+#else
 	void __iomem *reg = IOMEM(0xF7FCD038);
+#endif
 
 	val = readl(reg);
 
@@ -537,6 +540,33 @@ static void phy_init(struct geth_private *priv)
 	//enable crossover & scrambler
 	ethSetTxClock(1);
 	mvEthPhyWrite(priv, priv->mii.phy_id, 0x10, 0x138);
+
+#ifdef CONFIG_BERLIN2CDP
+
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 0x1B);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1E, 0x0E02);
+
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 0x10);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1E, 0xC025);
+
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 0x4);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1E, 0x07AC);
+
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 0x9);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1F, 0x07A6);
+
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 5);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1F, 0x8);
+
+
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 8);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1E, 0xE52D);
+
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 2);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1E, 0x8000);
+	udelay(1000);
+	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1E, 0);
+#else
 	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 4);
 	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1E, 0x39C);//Set ADC bias current
 	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 5);
@@ -549,6 +579,9 @@ static void phy_init(struct geth_private *priv)
 	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1D, 9);
 	mvEthPhyWrite(priv, priv->mii.phy_id, 0x1F, 0x17C6);
 #endif
+
+#endif
+
 	return;
 #endif
 	printk(KERN_INFO "Setting ethernet to auto-negotiation mode.\n");

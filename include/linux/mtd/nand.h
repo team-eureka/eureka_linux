@@ -59,9 +59,10 @@ extern int nand_unlock(struct mtd_info *mtd, loff_t ofs, uint64_t len);
 #define NAND_MAX_OOBSIZE	640
 #define NAND_MAX_PAGESIZE	16384
 
-#define SINGLE_PLANE		1
-#define DUAL_PLANE		2
-
+#define MTD_SINGLE_PLANE	1
+#define MTD_DUAL_PLANE		2
+#define MTD_ESLC		3
+#define MTD_SLC			4
 /*
  * Constants for hardware specific CLE/ALE/NCE function
  *
@@ -536,7 +537,7 @@ struct nand_chip {
 			int feature_addr, uint8_t *subfeature_para);
 	int (*onfi_get_features)(struct mtd_info *mtd, struct nand_chip *chip,
 			int feature_addr, uint8_t *subfeature_para);
-	int (*get_planes)(struct mtd_info *mtd);
+	int (*get_mtd_info)(struct mtd_info *mtd, loff_t off, loff_t *dst);
 
 	int chip_delay;
 	unsigned int options;

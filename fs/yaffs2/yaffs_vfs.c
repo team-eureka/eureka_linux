@@ -2778,7 +2778,6 @@ static struct super_block *yaffs_internal_read_super(int yaffs_version,
 
 	/* Set up the memory size parameters.... */
 
-
 	param->n_reserved_blocks = 5;
 	param->n_caches = (options.no_cache) ? 0 : 10;
 	param->inband_tags = options.inband_tags;
@@ -2826,6 +2825,9 @@ static struct super_block *yaffs_internal_read_super(int yaffs_version,
 		param->total_bytes_per_chunk = YAFFS_BYTES_PER_CHUNK;
 	}
 
+	/* Tweak reserved blocks count for very small partitions */
+	if (n_blocks < 32)
+		param->n_reserved_blocks = 2;
 	param->start_block = 0;
 	param->end_block = n_blocks - 1;
 

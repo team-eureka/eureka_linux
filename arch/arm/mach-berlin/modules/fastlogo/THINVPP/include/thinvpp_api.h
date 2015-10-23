@@ -1892,45 +1892,6 @@ typedef struct VPP_SCL_CTRL_PARAM_T
     VPP_SCL_CTRL	SclCtrl;
 }VPP_SCL_CTRL_PARAM;
 
-typedef struct
-{
-    unsigned planes;
-    int vres;
-    VPP_WIN win;
-    unsigned *logoBuf;
-    unsigned *logoBuf_2;
-    unsigned *mapaddr;
-    long length;
-    unsigned count;
-
-    const unsigned *bcm_cmd_0;
-    unsigned bcm_cmd_0_len;
-    const unsigned *bcm_cmd_a;
-    unsigned bcm_cmd_a_len;
-    const unsigned *bcm_cmd_n;
-    unsigned bcm_cmd_n_len;
-    const unsigned *bcm_cmd_z;
-    unsigned bcm_cmd_z_len;
-
-    unsigned *logo_frame_dma_cmd;
-    unsigned logo_dma_cmd_len;
-
-    unsigned bcmQ_len;
-    unsigned dmaQ_len;
-    unsigned cfgQ_len;
-
-#if LOGO_USE_SHM
-    size_t mSHMOffset;
-    unsigned mSHMSize;
-    char * bcmQ;
-    unsigned bcmQ_phys;
-    char * dmaQ;
-    unsigned dmaQ_phys;
-    char * cfgQ;
-    unsigned cfgQ_phys;
-#endif
-} logo_device_t;
-
 /************* VPP module external APIs *****************/
 
 /***********************************************
@@ -1942,7 +1903,8 @@ typedef struct
  *         MV_THINVPP_ENODEV - no device
  *         MV_THINVPP_ENOMEM - no memory
  ***********************************************/
-int MV_THINVPP_Create(int base_addr);
+//int MV_THINVPP_Create(int base_addr);
+int MV_THINVPP_Create(void);
 
 /***********************************************
  * FUNCTION: destroy a VPP object

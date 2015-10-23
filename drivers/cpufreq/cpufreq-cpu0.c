@@ -39,6 +39,116 @@ static unsigned int cpu0_get_speed(unsigned int cpu)
 	return clk_get_rate(cpu_clk) / 1000;
 }
 
+int __cpu_get_mv(struct cpufreq_policy *policy,
+		unsigned int *mv)
+{
+	unsigned long volt;
+	*mv = 0;
+
+	if (cpu_reg) {
+		volt = regulator_get_voltage(cpu_reg);
+		*mv = volt/1000;
+	}
+	return 0;
+}
+
+static int __cpu_get_cur_voltages(unsigned int *cur_volt,
+				  unsigned int *norm_volt)
+{
+	unsigned int cur_freq;
+	struct opp *opp;
+	unsigned int tol;
+
+	cur_freq = clk_get_rate(cpu_clk);
+
+	if (cpu_reg) {
+		rcu_read_lock();
+		opp = opp_find_freq_ceil(cpu_dev, &cur_freq);
+		if (IS_ERR(opp)) {
+			rcu_read_unlock();
+			pr_err("failed to find OPP for %ld\n", cur_freq);
+			return PTR_ERR(opp);
+		}
+		*norm_volt = opp_get_voltage(opp);
+		rcu_read_unlock();
+		*cur_volt = regulator_get_voltage(cpu_reg);
+	}
+	else
+	{
+		return 1;
+	}
+	return 0;
+}
+
+int __cpu_get_boost(struct cpufreq_policy *policy,
+			unsigned int *boost)
+{
+	unsigned int cur_volt, norm_volt;
+
+	if (__cpu_get_cur_voltages(&cur_volt,&norm_volt))
+	{
+		*boost = 1;
+		return 1;
+	}
+
+	if (cur_volt < norm_volt){
+		*boost = 0;
+		return 0;
+	}
+	else if (cur_volt == norm_volt){
+		*boost = 1;
+		return 1;
+	}
+	else{
+		*boost = 2;
+		return 2;
+	}
+
+}
+
+int __cpu_set_boost(struct cpufreq_policy *policy,
+		unsigned int boost)
+{
+	int ret;
+	unsigned int cur_volt, norm_volt, new_volt,tol;
+
+	if (__cpu_get_cur_voltages(&cur_volt,&norm_volt))
+	{
+		pr_err("unable to determine current voltage\n");
+		return 1;
+	}
+
+	switch (boost){
+		case 0:
+			new_volt = norm_volt - 25000;
+			break;
+		case 1:
+			new_volt = norm_volt;
+			break;
+		case 2:
+			new_volt = norm_volt + 25000;
+			break;
+		default:
+			new_volt = norm_volt;
+	}
+
+	if (new_volt > 1180000){
+		pr_err("voltage out of bounds\n");
+		return -EINVAL;
+	}
+
+	if (cpu_reg) {
+		tol = new_volt * voltage_tolerance / 100;
+
+		ret = regulator_set_voltage_tol(cpu_reg, new_volt, tol);
+		if (ret) {
+			pr_err("failed to scale voltage: %d\n", ret);
+			return ret;
+		}
+	}
+	return 0;
+}
+
 static int cpu0_set_target(struct cpufreq_policy *policy,
 			   unsigned int target_freq, unsigned int relation)
 {
@@ -47,6 +157,7 @@ static int cpu0_set_target(struct cpufreq_policy *policy,
 	unsigned long freq_Hz, volt = 0, volt_old = 0, tol = 0;
 	unsigned int index, cpu;
 	int ret;
+
 
 	ret = cpufreq_frequency_table_target(policy, freq_table, target_freq,
 					     relation, &index);
@@ -61,6 +172,7 @@ static int cpu0_set_target(struct cpufreq_policy *policy,
 		freq_Hz = freq_table[index].frequency * 1000;
 	freqs.new = freq_Hz / 1000;
 	freqs.old = clk_get_rate(cpu_clk) / 1000;
+
 
 	if (freqs.old == freqs.new)
 		return 0;
@@ -203,17 +315,19 @@ static int cpu0_cpufreq_driver_init(void)
 		pr_err("failed to get cpu0 clock: %d\n", ret);
 		goto out_put_node;
 	}
-
 	cpu_reg = regulator_get(cpu_dev, "cpu0");
 	if (IS_ERR(cpu_reg)) {
 		pr_warn("failed to get cpu0 regulator\n");
 		cpu_reg = NULL;
 	}
 
-	ret = of_init_opp_table(cpu_dev);
-	if (ret) {
-		pr_err("failed to init OPP table: %d\n", ret);
-		goto out_put_node;
+	ret = opp_get_opp_count(cpu_dev);
+	if (ret < 0) {
+		ret = of_init_opp_table(cpu_dev);
+		if (ret) {
+			pr_err("failed to init OPP table: %d\n", ret);
+			goto out_put_node;
+		}
 	}
 
 	ret = opp_init_cpufreq_table(cpu_dev, &freq_table);

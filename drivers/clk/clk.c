@@ -700,6 +700,7 @@ static void __clk_recalc_rates(struct clk *clk, unsigned long msg)
  * is set, which means a recalc_rate will be issued.
  * If clk is NULL then returns 0.
  */
+#ifdef CONFIG_BERLIN2CDP
 unsigned long clk_get_rate(struct clk *clk)
 {
 	unsigned long rate;
@@ -715,7 +716,7 @@ unsigned long clk_get_rate(struct clk *clk)
 	return rate;
 }
 EXPORT_SYMBOL_GPL(clk_get_rate);
-
+#endif
 /**
  * __clk_speculate_rates
  * @clk: first clk in the subtree

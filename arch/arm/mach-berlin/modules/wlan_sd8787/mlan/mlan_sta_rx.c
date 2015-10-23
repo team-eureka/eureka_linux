@@ -3,26 +3,20 @@
  *  @brief This file contains the handling of RX in MLAN
  *  module.
  *
- *  (C) Copyright 2008-2014 Marvell International Ltd. All Rights Reserved
+ *  Copyright (C) 2008-2014, Marvell International Ltd.
  *
- *  MARVELL CONFIDENTIAL
- *  The source code contained or described herein and all documents related to
- *  the source code ("Material") are owned by Marvell International Ltd or its
- *  suppliers or licensors. Title to the Material remains with Marvell
- *  International Ltd or its suppliers and licensors. The Material contains
- *  trade secrets and proprietary and confidential information of Marvell or its
- *  suppliers and licensors. The Material is protected by worldwide copyright
- *  and trade secret laws and treaty provisions. No part of the Material may be
- *  used, copied, reproduced, modified, published, uploaded, posted,
- *  transmitted, distributed, or disclosed in any way without Marvell's prior
- *  express written permission.
+ *  This software file (the "File") is distributed by Marvell International
+ *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
+ *  (the "License").  You may use, redistribute and/or modify this File in
+ *  accordance with the terms and conditions of the License, a copy of which
+ *  is available by writing to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA or on the
+ *  worldwide web at http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
  *
- *  No license under any patent, copyright, trade secret or other intellectual
- *  property right is granted to or conferred upon you by disclosure or delivery
- *  of the Materials, either expressly, by implication, inducement, estoppel or
- *  otherwise. Any license under such intellectual property rights must be
- *  express and approved by Marvell in writing.
- *
+ *  THE FILE IS DISTRIBUTED AS-IS, WITHOUT WARRANTY OF ANY KIND, AND THE
+ *  IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE
+ *  ARE EXPRESSLY DISCLAIMED.  The License provides additional details about
+ *  this warranty disclaimer.
  */
 
 /********************************************************
@@ -44,28 +38,9 @@ Change log:
 
 #include "mlan_decl.h"
 
-static void mlan_hist_data_reset();
-static void mlan_hist_data_set(t_s8 rxRate, t_s8 snr, t_s8 nflr);
-
-
 /********************************************************
 		Local Variables
 ********************************************************/
-
-//Number of samples in histogram (/proc/mwlan/mlan0/histogram).
-#define MLAN_HIST_MAX_SAMPLES   1048576
-
-typedef struct _hgm_data
-{
-	atomic_t rx_rate[RX_RATE_MAX];
-	atomic_t snr[SNR_MAX];
-	atomic_t noise_flr[NOISE_FLR_MAX];
-	atomic_t sig_str[SIG_STRENGTH_MAX];
-	atomic_t num_samples;
-
-} mlan_hgm_data;
-
-static mlan_hgm_data *pmlan_hist = 0;
 
 /** Ethernet II header */
 typedef struct {
@@ -144,78 +119,9 @@ void* mlan_memcpy(void *pDest, void *pSrc, unsigned int count)
 return pDest;
 }
 
-int mlan_hist_data_get(char *pBuf, unsigned int *pNumSamples)
-{
-	char *d = pBuf;
-	char *s;
-	unsigned int temp;
-	int ix, dest_ix = 0;
-	if (pmlan_hist)
-	{
-		*pNumSamples = atomic_read(&(pmlan_hist->num_samples));
-		for (ix = 0; ix < RX_RATE_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->rx_rate[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		for (ix = 0; ix < SNR_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->snr[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		for (ix = 0; ix < NOISE_FLR_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->noise_flr[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		for (ix = 0; ix < SIG_STRENGTH_MAX; ix++){
-			temp = atomic_read(&(pmlan_hist->sig_str[ix]));
-			s = &temp;
-			mlan_memcpy((void *) (pBuf + dest_ix), (void *) s, sizeof(unsigned int));
-			dest_ix += sizeof(unsigned int);
-		}
-		return 0;
-	}
-
-	*pNumSamples = 0;
-	return -1;
-}
-
-int mlan_hist_data_clear()
-{
-	if (pmlan_hist){
-		mlan_hist_data_reset();
-		return 0;
-	}
-	return -1;
-}
-
 /********************************************************
 		Local Functions
 ********************************************************/
-static void mlan_hist_data_reset()
-{
-	int ix;
-
-	atomic_set(&(pmlan_hist->num_samples), 0);
-	for (ix = 0; ix < RX_RATE_MAX; ix++) atomic_set(&(pmlan_hist->rx_rate[ix]), 0);
-	for (ix = 0; ix < SNR_MAX; ix++) atomic_set(&(pmlan_hist->snr[ix]), 0);
-	for (ix = 0; ix < NOISE_FLR_MAX; ix++) atomic_set(&(pmlan_hist->noise_flr[ix]), 0);
-	for (ix = 0; ix < SIG_STRENGTH_MAX; ix++) atomic_set(&(pmlan_hist->sig_str[ix]), 0);
-
-}
-
-static void mlan_hist_data_set(t_s8 rxRate, t_s8 snr, t_s8 nflr)
-{
-	atomic_inc(&(pmlan_hist->num_samples));
-	atomic_inc(&(pmlan_hist->rx_rate[rxRate]));
-	atomic_inc(&(pmlan_hist->snr[snr]));
-	atomic_inc(&(pmlan_hist->noise_flr[128 + nflr]));
-	atomic_inc(&(pmlan_hist->sig_str[nflr - snr]));
-}
 
 /********************************************************
 		Global functions
@@ -433,7 +339,7 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	t_u8 appletalk_aarp_type[2] = { 0x80, 0xf3 };
 	t_u8 ipx_snap_type[2] = { 0x81, 0x37 };
 	t_u8 tdls_action_type[2] = { 0x89, 0x0d };
-    t_u8 adj_rx_rate = 0;
+	t_u8 adj_rx_rate = 0;
 
 	ENTER();
 
@@ -540,37 +446,11 @@ wlan_process_rx_packet(pmlan_adapter pmadapter, pmlan_buffer pmbuf)
 	priv->rxpd_rate = prx_pd->rx_rate;
 	priv->rxpd_htinfo = prx_pd->ht_info;
 
-    if (priv->rxpd_htinfo & MBIT(0)){ //Check for 11n HT20 rates
-        adj_rx_rate = priv->rxpd_rate + MLAN_RATE_INDEX_MCS0;
-        PRINTM(MDATA,"wlan_process_rx_packet(): HT20 Rate! ht_info:%x Rx Rate:%d adj_rate:%d\n",
-                priv->rxpd_htinfo,priv->rxpd_rate,adj_rx_rate);
-    }
-    else { //BG rates
-        adj_rx_rate = (priv->rxpd_rate > MLAN_RATE_INDEX_OFDM0) ? priv->rxpd_rate - 1 : priv->rxpd_rate;
-        PRINTM(MDATA,"wlan_process_rx_packet(): HT20 Rate! ht_info:%x Rx Rate:%d adj_rate:%d\n",
-                priv->rxpd_htinfo,priv->rxpd_rate,adj_rx_rate);
-    }
-
-    if (pmlan_hist)
-    {
-        unsigned long curr_size;
-        curr_size = atomic_read(&(pmlan_hist->num_samples));
-        if (curr_size > MLAN_HIST_MAX_SAMPLES)
-        {
-            mlan_hist_data_reset();
-        }
-
-        mlan_hist_data_set( adj_rx_rate, prx_pd->snr, prx_pd->nf);
-    }
-    else
-    {
-        pmlan_hist = (mlan_hgm_data *) kmalloc(sizeof(mlan_hgm_data),GFP_KERNEL);
-
-        if (pmlan_hist){
-            mlan_hist_data_reset();
-            mlan_hist_data_set( adj_rx_rate, prx_pd->snr, prx_pd->nf);
-        }
-    }
+	if(priv->bss_type == MLAN_BSS_TYPE_STA){
+		adj_rx_rate = wlan_adjust_data_rate(priv, priv->rxpd_rate, priv->rxpd_htinfo);
+		pmadapter->callbacks.moal_hist_data_add(pmadapter->pmoal_handle,
+			pmbuf->bss_index, adj_rx_rate, prx_pd->snr, prx_pd->nf, prx_pd->antenna);
+	}
 
 	pmadapter->callbacks.moal_get_system_time(pmadapter->pmoal_handle,
 						  &pmbuf->out_ts_sec,

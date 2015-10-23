@@ -21,17 +21,13 @@
 #define _VPP_ISR_C_
 
 #include "linux/sched.h" // for cpu_clock()
-#include "thinvpp_module.h"
-#include "thinvpp_apifuncs.h"
-#include "thinvpp_isr.h"
+#include "fastlogo.h"
 
 #include "vpp.h"
 #include "maddr.h"
 
 #include "api_avio_dhub.h"
 #include "avioDhub.h"
-
-extern logo_device_t fastlogo_ctx;
 
 extern int stop_flag;
 extern int cpcb_start_flag;
@@ -47,7 +43,7 @@ static void set_bcm_cmd_0(THINVPP_OBJ *vpp_obj, unsigned bytes)
     pbcmbuf->writer += (bytes/sizeof(*pbcmbuf->writer));
 }
 #endif
-static void set_bcm_cmd(THINVPP_OBJ *vpp_obj, unsigned * cmd, unsigned bytes)
+static void set_bcm_cmd(THINVPP_OBJ *vpp_obj, const unsigned * cmd, unsigned bytes)
 {
     BCMBUF *pbcmbuf = vpp_obj->pVbiBcmBuf;
 
@@ -302,7 +298,7 @@ static unsigned *m_FE_DLR_SetDummyTG(unsigned *Que, THINVPP_OBJ *vpp_obj, unsign
 {
     unsigned int RegAddr;
 
-    RegAddr = vpp_obj->base_addr + RA_Vpp_VP_TG;
+    RegAddr = vpp_obj->base_addr + soc->RA_Vpp_VP_TG;
 
     /*write TG size*/
     *Que++ = ((VRes + VPP_FE_DUMMY_TG_SIZE_V_OFF_P) + ((HRes + VPP_FE_DUMMY_TG_SIZE_H_OFF_P) << 16));
@@ -329,20 +325,20 @@ static unsigned* m_UpdateVPSize(unsigned* Que, THINVPP_OBJ *vpp_obj, unsigned ih
 
     //THINVPP_BCMBUF_Write(vpp_obj->pVbiBcmBuf, vpp_obj->base_addr+RA_Vpp_vpIn_pix, TotalInpPix);
     *Que++ = TotalInpPix;
-    *Que++ = (vpp_obj->base_addr+RA_Vpp_vpIn_pix);
+    *Que++ = (vpp_obj->base_addr+soc->RA_Vpp_vpIn_pix);
     //THINVPP_BCMBUF_Write(vpp_obj->pVbiBcmBuf, vpp_obj->base_addr+RA_Vpp_vpOut_pix, TotalOutPix);
     *Que++ = TotalOutPix;
-    *Que++ = (vpp_obj->base_addr+RA_Vpp_vpOut_pix);
+    *Que++ = (vpp_obj->base_addr+soc->RA_Vpp_vpOut_pix);
 
     TotPixForWriteClient = (ivRes + 1) * ihRes;
     TotPixForReadClient = (TotPixForWriteClient * 26 + 63) / 64;
 
     //THINVPP_BCMBUF_Write(vpp_obj->pVbiBcmBuf, vpp_obj->base_addr+RA_Vpp_diW_pix, TotPixForWriteClient);
     *Que++ = TotPixForWriteClient;
-    *Que++ = (vpp_obj->base_addr+RA_Vpp_diW_pix);
+    *Que++ = (vpp_obj->base_addr+soc->RA_Vpp_diW_pix);
     //THINVPP_BCMBUF_Write(vpp_obj->pVbiBcmBuf, vpp_obj->base_addr+RA_Vpp_diR_word, TotPixForReadClient);
     *Que++ = TotPixForReadClient;
-    *Que++ = (vpp_obj->base_addr+RA_Vpp_diR_word);
+    *Que++ = (vpp_obj->base_addr+soc->RA_Vpp_diR_word);
 
     return Que;
 }

@@ -56,7 +56,7 @@ Change log:
 int
 woal_uap_do_priv_ioctl(struct net_device *dev, struct ifreq *req, int cmd)
 {
-	moal_private *priv = (moal_private *) netdev_priv(dev);
+	moal_private *priv = (moal_private *)netdev_priv(dev);
 	struct iwreq *wrq = (struct iwreq *)req;
 	int ret = 0;
 
@@ -162,7 +162,7 @@ woal_uap_do_priv_ioctl(struct net_device *dev, struct ifreq *req, int cmd)
  *  @return         N/A
  */
 void
-woal_ioctl_get_uap_info_resp(moal_private * priv, mlan_ds_get_info * info)
+woal_ioctl_get_uap_info_resp(moal_private *priv, mlan_ds_get_info *info)
 {
 	ENTER();
 	switch (info->sub_command) {

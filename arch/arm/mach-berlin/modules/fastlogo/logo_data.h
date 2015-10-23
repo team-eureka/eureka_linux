@@ -5,7 +5,6 @@ static unsigned int yuv_logo_height = 112;
 static unsigned int yuv_logo_offset_x = 210;
 static unsigned int yuv_logo_offset_y = 368;
 
-static unsigned int yuv_logo_bytepp = 2;
 /* Stride is a product of the width and bytes per pixel, assuming
  * the image itself is not padded.
  */

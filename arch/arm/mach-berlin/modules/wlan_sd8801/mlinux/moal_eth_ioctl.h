@@ -31,11 +31,11 @@ Change log:
 #define _WOAL_ETH_PRIV_H_
 
 /** Command disabled */
-#define	CMD_DISABLED                    0
+#define CMD_DISABLED                    0
 /** Command enabled */
-#define	CMD_ENABLED                     1
+#define CMD_ENABLED                     1
 /** Command get */
-#define	CMD_GET                         2
+#define CMD_GET                         2
 
 /** 2K bytes */
 #define WOAL_2K_BYTES       2000
@@ -68,6 +68,8 @@ Change log:
 #define PRIV_CMD_DATARATE   "getdatarate"
 #define PRIV_CMD_TXRATECFG  "txratecfg"
 #define PRIV_CMD_GETLOG     "getlog"
+#define PRIV_CMD_ESUPPMODE  "esuppmode"
+#define PRIV_CMD_PASSPHRASE "passphrase"
 #define PRIV_CMD_DEAUTH     "deauth"
 #ifdef UAP_SUPPORT
 #define PRIV_CMD_AP_DEAUTH     "apdeauth"
@@ -82,7 +84,7 @@ Change log:
 #ifdef STA_SUPPORT
 #define PRIV_CMD_GETSCANTABLE   "getscantable"
 #define PRIV_CMD_SETUSERSCAN    "setuserscan"
-#define PRIV_CMD_EXTCAPCFG		"extcapcfg"
+#define PRIV_CMD_EXTCAPCFG      "extcapcfg"
 #endif
 #define PRIV_CMD_DEEPSLEEP      "deepsleep"
 #define PRIV_CMD_IPADDR         "ipaddr"
@@ -122,6 +124,8 @@ Change log:
 #define PRIV_CMD_RDEEPROM       "rdeeprom"
 #define PRIV_CMD_MEMRDWR        "memrdwr"
 #define PRIV_CMD_SDCMD52RW      "sdcmd52rw"
+#define PRIV_CMD_ARPFILTER      "arpfilter"
+#define PRIV_CMD_HOTSPOTCFG     "hotspotcfg"
 #define PRIV_CMD_MGMT_FRAME_CTRL  "mgmtframectrl"
 #define PRIV_CMD_QCONFIG        "qconfig"
 #define PRIV_CMD_ADDTS          "addts"
@@ -137,7 +141,7 @@ Change log:
 #define PRIV_CMD_OFFCHANNEL     "offchannel"
 #endif
 /** Private command: Verext */
-#define PRIV_CMD_VEREXT    	    "verext"
+#define PRIV_CMD_VEREXT         "verext"
 #if defined(STA_SUPPORT)
 #define PRIV_CMD_RADIO_CTRL     "radioctrl"
 #endif
@@ -154,13 +158,16 @@ Change log:
 #ifdef STA_SUPPORT
 #define PRIV_CMD_AUTH_TYPE          "authtype"
 #endif
+#define PRIV_CMD_POWER_CONS         "powercons"
 #define PRIV_CMD_THERMAL            "thermal"
 #define PRIV_CMD_BCN_INTERVAL       "bcninterval"
 #ifdef STA_SUPPORT
 #define PRIV_CMD_GET_SIGNAL         "getsignal"
 #endif
+#if defined(STA_SUPPORT)
+#define PRIV_CMD_PMFCFG         "pmfcfg"
+#endif
 #define PRIV_CMD_INACTIVITYTO   "inactivityto"
-#define PRIV_CMD_ATIM_WINDOW    "atimwindow"
 #define PRIV_CMD_AMSDU_AGGR_CTRL    "amsduaggrctrl"
 #define PRIV_CMD_TX_BF_CAP          "httxbfcap"
 #define PRIV_CMD_SDIO_CLOCK         "sdioclock"
@@ -168,26 +175,45 @@ Change log:
 #define PRIV_CMD_MPA_CTRL           "mpactrl"
 #endif
 #define PRIV_CMD_SLEEP_PARAMS       "sleepparams"
+#if defined(DFS_TESTING_SUPPORT)
+#define PRIV_CMD_DFS_TESTING        "dfstesting"
+#endif
 #define PRIV_CMD_CFP_CODE           "cfpcode"
 #define PRIV_CMD_ANT_CFG            "antcfg"
 #define PRIV_CMD_SYSCLOCK       "sysclock"
 #define PRIV_CMD_ADHOC_AES      "adhocaes"
+#define PRIV_CMD_GET_KEY        "getkey"
 #define PRIV_CMD_ASSOCIATE      "associate"
 #define PRIV_CMD_PORT_CTRL      "port_ctrl"
 #define PRIV_CMD_PB_BYPASS      "pb_bypass"
+#define PRIV_CMD_COALESCE_STATUS    "coalesce_status"
 #define PRIV_CMD_SD_CMD53_RW        "sdcmd53rw"
+#ifdef RX_PACKET_COALESCE
+#define PRIV_CMD_RX_COAL_CFG "rxpktcoal_cfg"
+#endif
+#define PRIV_CMD_MULTI_CHAN_CFG "mc_cfg"
+#define PRIV_CMD_MULTI_CHAN_POLICY "mc_policy"
 #if defined(WIFI_DIRECT_SUPPORT)
+#if defined(UAP_CFG80211)
+#if LINUX_VERSION_CODE >= WIFI_DIRECT_KERNEL_VERSION
+#define PRIV_CMD_NOA_CFG            "noacfg"
+#endif
+#endif
 #endif
 #ifdef WIFI_DIRECT_SUPPORT
 #if defined(STA_CFG80211) || defined(UAP_CFG80211)
+#define PRIV_CMD_MIRACAST_CFG       "miracastcfg"
 #endif
 #endif
+#define PRIV_CMD_COEX_RX_WINSIZE    "coex_rx_winsize"
+#define PRIV_CMD_TX_AGGR_CTRL "txaggrctrl"
+#define PRIV_CMD_AUTO_TDLS          "autotdls"
 
 /** Private command ID for Android default commands */
-#define	WOAL_ANDROID_DEF_CMD        (SIOCDEVPRIVATE + 1)
+#define WOAL_ANDROID_DEF_CMD        (SIOCDEVPRIVATE + 1)
 
 /** Private command ID to send TLD configuration */
-#define	WOAL_TDLS_CONFIG            (SIOCDEVPRIVATE + 5)
+#define WOAL_TDLS_CONFIG            (SIOCDEVPRIVATE + 5)
 
 /** Private command ID to pass mgmt frame */
 #define WOAL_MGMT_FRAME_TX          WOAL_MGMT_FRAME_TX_IOCTL
@@ -196,7 +222,7 @@ Change log:
 #define WOAL_CUSTOM_IE_CFG          (SIOCDEVPRIVATE + 13)
 
 /** Private command ID for Android ICS priv CMDs */
-#define	WOAL_ANDROID_PRIV_CMD       (SIOCDEVPRIVATE + 14)
+#define WOAL_ANDROID_PRIV_CMD       (SIOCDEVPRIVATE + 14)
 
 /** Private command ID to get BSS type */
 #define WOAL_GET_BSS_TYPE           (SIOCDEVPRIVATE + 15)
@@ -211,6 +237,17 @@ int woal_do_ioctl(struct net_device *dev, struct ifreq *req, int cmd);
  * kernel updates "used_len" during copy_to_user
  */
 /** Private command structure from app */
+#ifdef USERSPACE_32BIT_OVER_KERNEL_64BIT
+typedef struct _android_wifi_priv_cmd {
+    /** Buffer pointer */
+	t_u64 buf;
+    /** buffer updated by driver */
+	int used_len;
+    /** buffer sent by application */
+	int total_len;
+} __attribute__ ((packed))
+     android_wifi_priv_cmd;
+#else
 typedef struct _android_wifi_priv_cmd {
     /** Buffer pointer */
 	char *buf;
@@ -219,6 +256,7 @@ typedef struct _android_wifi_priv_cmd {
     /** buffer sent by application */
 	int total_len;
 } android_wifi_priv_cmd;
+#endif
 
 #ifndef IFNAMSIZ
 #define IFNAMSIZ 16
@@ -314,6 +352,7 @@ struct mwreq {
 
 typedef struct woal_priv_ht_cap_info {
 	t_u32 ht_cap_info_bg;
+	t_u32 ht_cap_info_a;
 } woal_ht_cap_info;
 
 typedef struct woal_priv_addba {
@@ -332,7 +371,16 @@ typedef struct woal_priv_tx_rate_cfg {
 	t_u32 rate_index;
 } woal_tx_rate_cfg;
 
-mlan_status woal_set_ap_wps_p2p_ie(moal_private * priv, t_u8 * ie, size_t len);
+typedef struct woal_priv_esuppmode_cfg {
+	/* RSN mode */
+	t_u16 rsn_mode;
+	/* Pairwise cipher */
+	t_u8 pairwise_cipher;
+	/* Group cipher */
+	t_u8 group_cipher;
+} woal_esuppmode_cfg;
+
+mlan_status woal_set_ap_wps_p2p_ie(moal_private *priv, t_u8 *ie, size_t len);
 
 int woal_android_priv_cmd(struct net_device *dev, struct ifreq *req);
 

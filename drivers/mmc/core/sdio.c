@@ -783,7 +783,7 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 		/*
 		 * Change to the card's maximum speed.
 		 */
-		mmc_set_clock(host, mmc_sdio_get_max_clock(card));
+		mmc_set_clock(host, mmc_sdio_get_max_clock(card)/2);
 
 		/*
 		 * Switch to wider bus (if supported).

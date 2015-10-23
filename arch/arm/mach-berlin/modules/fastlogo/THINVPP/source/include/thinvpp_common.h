@@ -38,15 +38,11 @@
 
 /* BCM buffer size */
 /* DV1_BCM_BUFFER_SIZE + DV2_BCM_BUFFER_SIZE + DV3_BCM_BUFFER_SIZE = BCM_BUFFER_SIZE */
-#if (BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
-#define BCM_BUFFER_SIZE   0xA000//20480
-#else //(BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
 #define BCM_BUFFER_SIZE   0x17700 //96000
 #define DV1_BCM_BUFFER_SIZE   0x7d00 //32000
 #define DV2_BCM_BUFFER_SIZE   0x7d00 //32000
 #define DV3_BCM_BUFFER_SIZE   0x7d00 //32000
 #define VDE_BCM_BUFFER_SIZE   0x800
-#endif //(BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
 
 /* 3D De-interlacer field buffer size */
 #define DEINT_BUFFER_SIZE   (1920*1081*26*3/8) // 6 1080I frame (26-bit per pixel)
@@ -74,11 +70,7 @@
 #define TT_DATA_QUEUE_SIZE   (TT_DATA_LEN_PER_FRAME * 10)
 
 /* DMA command buffer size */
-#if (BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
-#define DMA_CMD_BUFFER_SIZE   (20 * 8)
-#else //(BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
 #define DMA_CMD_BUFFER_SIZE   (100 * 8)
-#endif //(BERLIN_CHIP_VERSION != BERLIN_BG2CD_A0)
 
 /* Hardware interface constants */
 

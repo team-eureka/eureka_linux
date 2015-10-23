@@ -781,6 +781,43 @@ struct tcp_sess {
 	/** tcp ack buffer */
 	void *ack_skb;
 };
+/** Number of samples in histogram (/proc/mwlan/mlan0/histogram).*/
+#define HIST_MAX_SAMPLES   1048576
+#ifdef ENABLE_802_11AC
+#define RX_RATE_MAX			196
+#else
+#define RX_RATE_MAX			76
+#endif
+
+/** SRN MAX  */
+#define SNR_MAX				256
+/** NOISE FLR MAX  */
+#define NOISE_FLR_MAX			256
+/** SIG STRENTGH MAX */
+#define SIG_STRENGTH_MAX		256
+/** historgram data */
+typedef struct _hgm_data
+{
+    /** rx rate */
+    atomic_t rx_rate[RX_RATE_MAX];
+    /** snr */
+    atomic_t snr[SNR_MAX];
+    /** noise flr */
+    atomic_t noise_flr[NOISE_FLR_MAX];
+    /** sig_str */
+    atomic_t sig_str[SIG_STRENGTH_MAX];
+    /** num sample */
+    atomic_t num_samples;
+}hgm_data;
+/** max antenna number */
+#define MAX_ANTENNA_NUM			1
+/* wlan_hist_proc_data */
+typedef struct _wlan_hist_proc_data {
+    /** antenna */
+    u8  ant_idx;
+    /** Private structure */
+    struct _moal_private *priv;
+}wlan_hist_proc_data;
 
 /** Private structure for MOAL */
 struct _moal_private {
@@ -911,6 +948,10 @@ struct _moal_private {
 	struct proc_dir_entry *proc_entry;
 	/** Proc entry name */
 	char proc_entry_name[IFNAMSIZ];
+        /** proc entry for hist */
+        struct proc_dir_entry   *hist_entry;
+        /** ant_hist_proc_data */
+        wlan_hist_proc_data     hist_proc[MAX_ANTENNA_NUM];
 	/** PROC wait queue */
 	wait_queue_head_t proc_wait_q __ATTRIB_ALIGN__;
 #endif				/* CONFIG_PROC_FS */
@@ -961,7 +1002,6 @@ struct _moal_private {
 #ifdef PROC_DEBUG
     /** MLAN debug info */
 	struct debug_data_priv items_priv;
-    struct debug_data_priv items_priv_hist;
     struct debug_data_priv items_priv_peers;
 #endif
 
@@ -987,6 +1027,7 @@ struct _moal_private {
 	t_u8 last_tx_buf_len;
     /** cookie */
 	t_u64 last_tx_cookie;
+    hgm_data            *hist_data[3];
 };
 
 /** Handle data structure for MOAL */
@@ -1178,7 +1219,7 @@ struct _moal_handle {
 	spinlock_t ioctl_lock;
 	/** Card specific driver version */
 	t_s8 driver_version[MLAN_MAX_VER_STR_LEN];
-
+       t_u8 histogram_table_num;
 };
 
 /**
@@ -1941,4 +1982,8 @@ int woal_is_connected(moal_private * priv, mlan_ssid_bssid * ssid_bssid);
 int woal_priv_hostcmd(moal_private * priv, t_u8 * respbuf, t_u32 respbuflen);
 void woal_tcp_ack_tx_indication(moal_private * priv, mlan_buffer * pmbuf);
 mlan_status woal_request_country_power_table(moal_private * priv, char *region);
+void woal_hist_do_reset(void *data);
+void woal_hist_reset_table(moal_private *priv,t_u8 antenna);
+void woal_hist_data_reset(moal_private *priv);
+void woal_hist_data_add(moal_private *priv,t_u8 rx_rate, t_s8 snr, t_s8 nflr, t_u8 antenna);
 #endif /* _MOAL_MAIN_H */

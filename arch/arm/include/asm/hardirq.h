@@ -7,10 +7,12 @@
 
 #define NR_IPI	6
 
+#define NR_IPI_MAX	16
+
 typedef struct {
 	unsigned int __softirq_pending;
 #ifdef CONFIG_SMP
-	unsigned int ipi_irqs[NR_IPI];
+	unsigned int ipi_irqs[NR_IPI_MAX];
 #endif
 } ____cacheline_aligned irq_cpustat_t;
 

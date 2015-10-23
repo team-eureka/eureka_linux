@@ -53,7 +53,7 @@ Change log:
 
 /** Host Control Registers : Upload host interrupt RSR */
 #define UP_LD_HOST_INT_RSR		(0x1U)
-#define HOST_INT_RSR_MASK		0x3F
+#define HOST_INT_RSR_MASK		0xFF
 
 /** Host Control Registers : Host interrupt mask */
 #define HOST_INT_MASK_REG		0x02
@@ -62,13 +62,25 @@ Change log:
 #define UP_LD_HOST_INT_MASK		(0x1U)
 /** Host Control Registers : Download host interrupt mask */
 #define DN_LD_HOST_INT_MASK		(0x2U)
+/** Host Control Registers : Cmd port upload interrupt mask */
+#define CMD_PORT_UPLD_INT_MASK		(0x1U << 6)
+/** Host Control Registers : Cmd port download interrupt mask */
+#define CMD_PORT_DNLD_INT_MASK		(0x1U << 7)
 /** Enable Host interrupt mask */
-#define HIM_ENABLE			(UP_LD_HOST_INT_MASK | DN_LD_HOST_INT_MASK)
+#define HIM_ENABLE			(UP_LD_HOST_INT_MASK   | \
+					DN_LD_HOST_INT_MASK    | \
+					CMD_PORT_UPLD_INT_MASK | \
+					CMD_PORT_DNLD_INT_MASK)
 /** Disable Host interrupt mask */
 #define	HIM_DISABLE			0xff
 
 /** Host Control Registers : Host interrupt status */
 #define HOST_INT_STATUS_REG		0x03
+
+/** Host Control Registers : Upload command port host interrupt status */
+#define UP_LD_CMD_PORT_HOST_INT_STATUS		(0x40U)
+/** Host Control Registers : Download command port host interrupt status */
+#define DN_LD_CMD_PORT_HOST_INT_STATUS		(0x80U)
 
 /** Host Control Registers : Upload host interrupt status */
 #define UP_LD_HOST_INT_STATUS		(0x1U)
@@ -196,6 +208,35 @@ Change log:
 /** Host Control Registers : I/O port 2 */
 #define IO_PORT_2_REG			0x7A
 
+/** Port for memory */
+#define MEM_PORT	                        0x10000
+/** Card Control Registers : cmd53 new mode */
+#define CMD53_NEW_MODE      (0x1U << 0)
+#define CMD_PORT_RD_LEN_EN  (0x1U << 2)
+#define CMD_PORT_AUTO_EN              (0x1U << 0)
+#define CMD_PORT_SLCT                   0x8000
+/** Ctrl port mask */
+#define CTRL_PORT_MASK			0x0001
+
+/** SD8787 card type */
+#define CARD_TYPE_SD8787   0x01
+/** SD8777 card type */
+#define CARD_TYPE_SD8777   0x02
+/** SD8887 card type */
+#define CARD_TYPE_SD8887   0x03
+/** SD8801 card type */
+#define CARD_TYPE_SD8801   0x04
+/** SD8897 card type */
+#define CARD_TYPE_SD8897   0x05
+/** SD8797 card type */
+#define CARD_TYPE_SD8797   0x06
+
+#define IS_SD8777(ct) (CARD_TYPE_SD8777 == (ct))
+#define IS_SD8787(ct) (CARD_TYPE_SD8787 == (ct))
+#define IS_SD8887(ct) (CARD_TYPE_SD8887 == (ct))
+#define IS_SD8801(ct) (CARD_TYPE_SD8801 == (ct))
+#define IS_SD8897(ct) (CARD_TYPE_SD8897 == (ct))
+#define IS_SD8797(ct) (CARD_TYPE_SD8797 == (ct))
 /** Event header Len*/
 #define MLAN_EVENT_HEADER_LEN           8
 
@@ -217,7 +258,30 @@ Change log:
 			(((a->mpa_tx.buf_len) + len) <= (a->mpa_tx.buf_size))
 
 /** Copy current packet (SDIO Tx aggregation buffer) to SDIO buffer */
-#define MP_TX_AGGR_BUF_PUT(a, mbuf, port) do {                  \
+#define MP_TX_AGGR_BUF_PUT_NEWMODE(a, mbuf, port) do {                  \
+	pmadapter->callbacks.moal_memmove(a->pmoal_handle, \
+		&a->mpa_tx.buf[a->mpa_tx.buf_len], \
+		mbuf->pbuf+mbuf->data_offset, mbuf->data_len);\
+	a->mpa_tx.buf_len += mbuf->data_len;                        \
+    a->mpa_tx.mp_wr_info[a->mpa_tx.pkt_cnt] = *(t_u16 *)(mbuf->pbuf+mbuf->data_offset); \
+	if (!a->mpa_tx.pkt_cnt) {                                   \
+	    a->mpa_tx.start_port = port;                            \
+	}                                                           \
+	a->mpa_tx.ports |= (1 << port);                             \
+	a->mpa_tx.pkt_cnt++;                                        \
+} while (0)
+
+#define MP_TX_AGGR_BUF_PUT_SG_NEWMODE(a, mbuf, port) do {               \
+	a->mpa_tx.buf_len += mbuf->data_len;                        \
+    a->mpa_tx.mp_wr_info[a->mpa_tx.pkt_cnt] = *(t_u16 *)(mbuf->pbuf+mbuf->data_offset); \
+    a->mpa_tx.mbuf_arr[a->mpa_tx.pkt_cnt] = mbuf;               \
+	if (!a->mpa_tx.pkt_cnt) {                                   \
+	    a->mpa_tx.start_port = port;                            \
+	}                                                           \
+	a->mpa_tx.ports |= (1 << port);                             \
+	a->mpa_tx.pkt_cnt++;                                        \
+} while (0)
+#define MP_TX_AGGR_BUF_PUT_NONEWMODE(a, mbuf, port) do {                  \
 	pmadapter->callbacks.moal_memmove(a->pmoal_handle, \
 		&a->mpa_tx.buf[a->mpa_tx.buf_len], \
 		mbuf->pbuf+mbuf->data_offset, mbuf->data_len);\
@@ -230,29 +294,44 @@ Change log:
 	    a->mpa_tx.ports |= (1 << (a->mpa_tx.pkt_cnt));			\
 	} else {                                                    \
 	      a->mpa_tx.ports |= (1 << (a->mpa_tx.pkt_cnt \
-			+ 1 + (MAX_PORT - a->mp_end_port)));  \
+			+ 1 + (a->psdio_device->max_ports - a->mp_end_port)));  \
 	}                                                           \
 	a->mpa_tx.pkt_cnt++;                                       \
 } while (0)
-
+#define MP_TX_AGGR_BUF_PUT_SG_NONEWMODE(a, mbuf, port) do {                  \
+	a->mpa_tx.buf_len += mbuf->data_len;                        \
+    a->mpa_tx.mp_wr_info[a->mpa_tx.pkt_cnt] = *(t_u16 *)(mbuf->pbuf+mbuf->data_offset); \
+    a->mpa_tx.mbuf_arr[a->mpa_tx.pkt_cnt] = mbuf;               \
+	if (!a->mpa_tx.pkt_cnt) {                                   \
+	    a->mpa_tx.start_port = port;                            \
+	}                                                           \
+	if (a->mpa_tx.start_port <= port) {                         \
+	    a->mpa_tx.ports |= (1 << (a->mpa_tx.pkt_cnt));			\
+	} else {                                                    \
+	      a->mpa_tx.ports |= (1 << (a->mpa_tx.pkt_cnt \
+			+ 1 + (a->psdio_device->max_ports - a->mp_end_port)));  \
+	}                                                           \
+	a->mpa_tx.pkt_cnt++;                                       \
+} while (0)
 /** SDIO Tx aggregation limit ? */
 #define MP_TX_AGGR_PKT_LIMIT_REACHED(a) ((a->mpa_tx.pkt_cnt) \
-								== (a->mpa_tx.pkt_aggr_limit))
+			== (a->mpa_tx.pkt_aggr_limit))
 
 /** SDIO Tx aggregation port limit ? */
+
 #define MP_TX_AGGR_PORT_LIMIT_REACHED(a) ((a->curr_wr_port < \
-			a->mpa_tx.start_port) && (((MAX_PORT - \
-			a->mpa_tx.start_port) + a->curr_wr_port) >= \
-				SDIO_MP_AGGR_DEF_PKT_LIMIT))
+                a->mpa_tx.start_port) && (((a->psdio_device->max_ports - \
+                a->mpa_tx.start_port) + a->curr_wr_port) >= \
+                    a->psdio_device->mp_aggr_pkt_limit))
 
 /** Reset SDIO Tx aggregation buffer parameters */
 #define MP_TX_AGGR_BUF_RESET(a) do {         \
-    memset(a, a->mpa_tx.mp_wr_info, 0, sizeof(a->mpa_tx.mp_wr_info)); \
+	memset(a, a->mpa_tx.mp_wr_info, 0, sizeof(a->mpa_tx.mp_wr_info)); \
 	a->mpa_tx.pkt_cnt = 0;                   \
 	a->mpa_tx.buf_len = 0;                   \
 	a->mpa_tx.ports = 0;                     \
 	a->mpa_tx.start_port = 0;                \
-} while (0);
+} while (0)
 
 #endif /* SDIO_MULTI_PORT_TX_AGGR */
 
@@ -260,13 +339,19 @@ Change log:
 
 /** SDIO Rx aggregation limit ? */
 #define MP_RX_AGGR_PKT_LIMIT_REACHED(a) (a->mpa_rx.pkt_cnt \
-								== a->mpa_rx.pkt_aggr_limit)
+		== a->mpa_rx.pkt_aggr_limit)
 
 /** SDIO Rx aggregation port limit ? */
-#define MP_RX_AGGR_PORT_LIMIT_REACHED(a) ((a->curr_rd_port < \
-			a->mpa_rx.start_port) && (((MAX_PORT - \
-			a->mpa_rx.start_port) + a->curr_rd_port) >= \
-			SDIO_MP_AGGR_DEF_PKT_LIMIT))
+#define MP_RX_AGGR_PORT_LIMIT_REACHED_NEWMODE(a) \
+			(((a->curr_rd_port < a->mpa_rx.start_port) && \
+			(((a->psdio_device->max_ports - a->mpa_rx.start_port) + a->curr_rd_port) \
+			>= (a->mp_end_port >> 1))) || \
+			((a->curr_rd_port - a->mpa_rx.start_port) >= \
+			(a->mp_end_port >> 1)))
+#define MP_RX_AGGR_PORT_LIMIT_REACHED_NONEWMODE(a) ((a->curr_rd_port < \
+                a->mpa_rx.start_port) && (((a->psdio_device->max_ports - \
+                a->mpa_rx.start_port) + a->curr_rd_port) >= \
+                a->psdio_device->mp_aggr_pkt_limit))
 
 /** SDIO Rx aggregation in progress ? */
 #define MP_RX_AGGR_IN_PROGRESS(a) (a->mpa_rx.pkt_cnt > 0)
@@ -276,7 +361,18 @@ Change log:
 	((a->mpa_rx.buf_len + rx_len) <= a->mpa_rx.buf_size)
 
 /** Prepare to copy current packet from card to SDIO Rx aggregation buffer */
-#define MP_RX_AGGR_SETUP(a, mbuf, port, rx_len) do {   \
+#define MP_RX_AGGR_SETUP_NEWMODE(a, mbuf, port, rx_len) do {   \
+	a->mpa_rx.buf_len += rx_len;                       \
+	if (!a->mpa_rx.pkt_cnt) {                          \
+	    a->mpa_rx.start_port = port;                   \
+	}                                                  \
+	a->mpa_rx.ports |= (1 << port);                    \
+	a->mpa_rx.mbuf_arr[a->mpa_rx.pkt_cnt] = mbuf;      \
+	a->mpa_rx.len_arr[a->mpa_rx.pkt_cnt] = rx_len;     \
+	a->mpa_rx.pkt_cnt++;                              \
+} while (0);
+
+#define MP_RX_AGGR_SETUP_NONEWMODE(a, mbuf, port, rx_len) do {   \
 	a->mpa_rx.buf_len += rx_len;                       \
 	if (!a->mpa_rx.pkt_cnt) {                          \
 	    a->mpa_rx.start_port = port;                   \
@@ -297,29 +393,280 @@ Change log:
 	a->mpa_rx.buf_len = 0;                   \
 	a->mpa_rx.ports = 0;                     \
 	a->mpa_rx.start_port = 0;                \
-} while (0);
+} while (0)
 
 #endif /* SDIO_MULTI_PORT_RX_AGGR */
+
+static const struct _mlan_sdio_card_reg mlan_reg_sd87xx = {
+	.start_rd_port = 1,
+	.start_wr_port = 1,
+	.base_0_reg = 0x40,	// 0x0040,
+	.base_1_reg = 0x41,	// 0x0041,
+	.poll_reg = 0x30,
+	.host_int_enable = UP_LD_HOST_INT_MASK | DN_LD_HOST_INT_MASK,
+	.host_int_status = DN_LD_HOST_INT_STATUS | UP_LD_HOST_INT_STATUS,
+	.status_reg_0 = 0x60,
+	.status_reg_1 = 0x61,
+	.sdio_int_mask = 0x3f,
+	.data_port_mask = 0x0000fffe,
+	.max_mp_regs = 64,
+	.rd_bitmap_l = 0x04,
+	.rd_bitmap_u = 0x05,
+	.wr_bitmap_l = 0x06,
+	.wr_bitmap_u = 0x07,
+	.rd_len_p0_l = 0x08,
+	.rd_len_p0_u = 0x09,
+	.card_misc_cfg_reg = 0x6c,
+};
+
+static const struct _mlan_sdio_card_reg mlan_reg_sd8887 = {
+	.start_rd_port = 0,
+	.start_wr_port = 0,
+	.base_0_reg = 0x6C,
+	.base_1_reg = 0x6D,
+	.poll_reg = 0x5C,
+	.host_int_enable = UP_LD_HOST_INT_MASK | DN_LD_HOST_INT_MASK |
+		CMD_PORT_UPLD_INT_MASK | CMD_PORT_DNLD_INT_MASK,
+	.host_int_status = DN_LD_HOST_INT_STATUS | UP_LD_HOST_INT_STATUS |
+		DN_LD_CMD_PORT_HOST_INT_STATUS | UP_LD_CMD_PORT_HOST_INT_STATUS,
+	.status_reg_0 = 0x90,
+	.status_reg_1 = 0x91,
+	.sdio_int_mask = 0xff,
+	.data_port_mask = 0xffffffff,
+	.max_mp_regs = 196,
+	.rd_bitmap_l = 0x10,
+	.rd_bitmap_u = 0x11,
+	.rd_bitmap_1l = 0x12,
+	.rd_bitmap_1u = 0x13,
+	.wr_bitmap_l = 0x14,
+	.wr_bitmap_u = 0x15,
+	.wr_bitmap_1l = 0x16,
+	.wr_bitmap_1u = 0x17,
+	.rd_len_p0_l = 0x18,
+	.rd_len_p0_u = 0x19,
+	.card_misc_cfg_reg = 0xD8,
+};
+
+static const struct _mlan_sdio_card_reg mlan_reg_sd8897 = {
+	.start_rd_port = 0,
+	.start_wr_port = 0,
+	.base_0_reg = 0x60,
+	.base_1_reg = 0x61,
+	.poll_reg = 0x50,
+	.host_int_enable = UP_LD_HOST_INT_MASK | DN_LD_HOST_INT_MASK |
+		CMD_PORT_UPLD_INT_MASK | CMD_PORT_DNLD_INT_MASK,
+	.host_int_status = DN_LD_HOST_INT_STATUS | UP_LD_HOST_INT_STATUS |
+		DN_LD_CMD_PORT_HOST_INT_STATUS | UP_LD_CMD_PORT_HOST_INT_STATUS,
+	.status_reg_0 = 0xC0,
+	.status_reg_1 = 0xC1,
+	.sdio_int_mask = 0xff,
+	.data_port_mask = 0xffffffff,
+	.max_mp_regs = 184,
+	.rd_bitmap_l = 0x04,
+	.rd_bitmap_u = 0x05,
+	.rd_bitmap_1l = 0x06,
+	.rd_bitmap_1u = 0x07,
+	.wr_bitmap_l = 0x08,
+	.wr_bitmap_u = 0x09,
+	.wr_bitmap_1l = 0x0A,
+	.wr_bitmap_1u = 0x0B,
+	.rd_len_p0_l = 0x0C,
+	.rd_len_p0_u = 0x0D,
+	.card_misc_cfg_reg = 0xCC,
+};
+
+/** ampdu info for general card */
+static struct _ampdu_info ampdu_info_nov15 = {
+	.ampdu_sta_txwinsize = MLAN_STA_AMPDU_DEF_TXWINSIZE_NOV15,
+	.ampdu_uap_txwinsize = MLAN_UAP_AMPDU_DEF_TXWINSIZE_NOV15,
+	.ampdu_uap_rxwinsize = MLAN_UAP_AMPDU_DEF_RXWINSIZE_NOV15,
+	.ampdu_wfd_txrxwinsize = MLAN_WFD_AMPDU_DEF_TXRXWINSIZE_NOV15,
+};
+
+/** ampdu info for sd8887 and sd8897 */
+static struct _ampdu_info ampdu_info_v15 = {
+	.ampdu_sta_txwinsize = MLAN_STA_AMPDU_DEF_TXWINSIZE,
+	.ampdu_uap_txwinsize = MLAN_UAP_AMPDU_DEF_TXWINSIZE,
+	.ampdu_uap_rxwinsize = MLAN_UAP_AMPDU_DEF_RXWINSIZE,
+	.ampdu_wfd_txrxwinsize = MLAN_WFD_AMPDU_DEF_TXRXWINSIZE,
+};
+
+static const struct _mlan_sdio_device mlan_sdio_sd8777 = {
+	.reg = &mlan_reg_sd87xx,
+	.max_ports = 16,
+	.mp_aggr_pkt_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT_8,
+	.supports_sdio_new_mode = MFALSE,
+	.has_control_mask = MTRUE,
+	.io_port_0_reg = 0x78,
+	.io_port_1_reg = 0x79,
+	.io_port_2_reg = 0x7A,
+	.host_int_rsr_reg = 0x01,
+	.card_rx_len_reg = 0x62,
+	.card_rx_unit_reg = 0x63,
+	.host_int_mask_reg = 0x02,
+	.host_int_status_reg = 0x03,
+	.mp_tx_aggr_buf_size = 16384,
+	.mp_rx_aggr_buf_size = 16384,
+	.max_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K,
+	.driver_supplicant_auth = 0,
+	.v15_update = 0,
+	.v15_fw_api = 0,
+	.ext_scan = 1,
+	.ampdu_info = &ampdu_info_nov15,
+};
+
+static const struct _mlan_sdio_device mlan_sdio_sd8787 = {
+	.reg = &mlan_reg_sd87xx,
+	.max_ports = 16,
+	.mp_aggr_pkt_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT_8,
+	.supports_sdio_new_mode = MFALSE,
+	.has_control_mask = MTRUE,
+	.io_port_0_reg = 0x78,
+	.io_port_1_reg = 0x79,
+	.io_port_2_reg = 0x7A,
+	.host_int_rsr_reg = 0x01,
+	.card_rx_len_reg = 0x62,
+	.card_rx_unit_reg = 0x63,
+	.host_int_mask_reg = 0x02,
+	.host_int_status_reg = 0x03,
+	.mp_tx_aggr_buf_size = 16384,
+	.mp_rx_aggr_buf_size = 16384,
+	.max_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K,
+	.driver_supplicant_auth = 0,
+	.v15_update = 0,
+	.v15_fw_api = 0,
+	.ext_scan = 1,
+	.ampdu_info = &ampdu_info_nov15,
+};
+
+static const struct _mlan_sdio_device mlan_sdio_sd8797 = {
+	.reg = &mlan_reg_sd87xx,
+	.max_ports = 16,
+	.mp_aggr_pkt_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT_8,
+	.supports_sdio_new_mode = MFALSE,
+	.has_control_mask = MTRUE,
+	.io_port_0_reg = 0x78,
+	.io_port_1_reg = 0x79,
+	.io_port_2_reg = 0x7A,
+	.host_int_rsr_reg = 0x01,
+	.card_rx_len_reg = 0x62,
+	.card_rx_unit_reg = 0x63,
+	.host_int_mask_reg = 0x02,
+	.host_int_status_reg = 0x03,
+	.mp_tx_aggr_buf_size = 16384,
+	.mp_rx_aggr_buf_size = 16384,
+	.max_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K,
+	.driver_supplicant_auth = 0,
+	.v15_update = 0,
+	.v15_fw_api = 0,
+	.ext_scan = 1,
+	.ampdu_info = &ampdu_info_nov15,
+};
+
+static const struct _mlan_sdio_device mlan_sdio_sd8887 = {
+	.reg = &mlan_reg_sd8887,
+	.max_ports = 32,
+	.mp_aggr_pkt_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT_16,
+	.supports_sdio_new_mode = MTRUE,
+	.has_control_mask = MFALSE,
+	.card_config_2_1_reg = 0xD9,
+	.cmd_config_0 = 0xC4,
+	.cmd_config_1 = 0xC5,
+	.cmd_rd_len_0 = 0xC0,
+	.cmd_rd_len_1 = 0xC1,
+	.io_port_0_reg = 0xE4,
+	.io_port_1_reg = 0xE5,
+	.io_port_2_reg = 0xE6,
+	.host_int_rsr_reg = 0x04,
+	.card_rx_len_reg = 0x92,
+	.card_rx_unit_reg = 0x93,
+	.host_int_mask_reg = 0x08,
+	.host_int_status_reg = 0x0C,
+	.mp_tx_aggr_buf_size = 32768,
+	.mp_rx_aggr_buf_size = 32768,
+	.max_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K,
+	.driver_supplicant_auth = 0,
+	.v15_update = 1,
+	.v15_fw_api = 1,
+	.ext_scan = 1,
+	.ampdu_info = &ampdu_info_v15,
+};
+
+static const struct _mlan_sdio_device mlan_sdio_sd8801 = {
+	.reg = &mlan_reg_sd87xx,
+	.max_ports = 16,
+	.mp_aggr_pkt_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT_8,
+	.supports_sdio_new_mode = MFALSE,
+	.has_control_mask = MTRUE,
+	.io_port_0_reg = 0x78,
+	.io_port_1_reg = 0x79,
+	.io_port_2_reg = 0x7A,
+	.host_int_rsr_reg = 0x01,
+	.card_rx_len_reg = 0x62,
+	.card_rx_unit_reg = 0x63,
+	.host_int_mask_reg = 0x02,
+	.host_int_status_reg = 0x03,
+	.mp_tx_aggr_buf_size = 16384,
+	.mp_rx_aggr_buf_size = 16384,
+	.max_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_2K,
+	.driver_supplicant_auth = 1,
+	.v15_update = 0,
+	.v15_fw_api = 0,
+	.ext_scan = 1,
+	.ampdu_info = &ampdu_info_nov15,
+};
+
+static const struct _mlan_sdio_device mlan_sdio_sd8897 = {
+	.reg = &mlan_reg_sd8897,
+	.max_ports = 32,
+	.mp_aggr_pkt_limit = SDIO_MP_AGGR_DEF_PKT_LIMIT_16,
+	.supports_sdio_new_mode = MTRUE,
+	.has_control_mask = MFALSE,
+	.card_config_2_1_reg = 0xCD,
+	.cmd_config_0 = 0xB8,
+	.cmd_config_1 = 0xB9,
+	.cmd_rd_len_0 = 0xB4,
+	.cmd_rd_len_1 = 0xB5,
+	.io_port_0_reg = 0xD8,
+	.io_port_1_reg = 0xD9,
+	.io_port_2_reg = 0xDA,
+	.host_int_rsr_reg = 0x01,
+	.card_rx_len_reg = 0xC2,
+	.card_rx_unit_reg = 0xC3,
+	.host_int_mask_reg = 0x02,
+	.host_int_status_reg = 0x03,
+	.mp_tx_aggr_buf_size = 32768,
+	.mp_rx_aggr_buf_size = 32768,
+	.max_tx_buf_size = MLAN_TX_DATA_BUF_SIZE_4K,
+	.driver_supplicant_auth = 0,
+	.v15_update = 1,
+	.v15_fw_api = 1,
+	.ext_scan = 1,
+	.ampdu_info = &ampdu_info_v15,
+};
 
 /** Enable host interrupt */
 mlan_status wlan_enable_host_int(pmlan_adapter pmadapter);
 /** Probe and initialization function */
 mlan_status wlan_sdio_probe(pmlan_adapter pmadapter);
+mlan_status wlan_get_sdio_device(pmlan_adapter pmadapter);
 /** multi interface download check */
-mlan_status wlan_check_winner_status(mlan_adapter * pmadapter, t_u32 * val);
+mlan_status wlan_check_winner_status(mlan_adapter *pmadapter, t_u32 *val);
 
+#ifdef SDIO_MULTI_PORT_TX_AGGR
+mlan_status wlan_send_mp_aggr_buf(mlan_adapter *pmadapter);
+#endif
 /** Firmware status check */
-mlan_status wlan_check_fw_status(mlan_adapter * pmadapter, t_u32 pollnum);
+mlan_status wlan_check_fw_status(mlan_adapter *pmadapter, t_u32 pollnum);
 /** Read interrupt status */
 t_void wlan_interrupt(pmlan_adapter pmadapter);
 /** Process Interrupt Status */
-mlan_status wlan_process_int_status(mlan_adapter * pmadapter);
+mlan_status wlan_process_int_status(mlan_adapter *pmadapter);
 /** Transfer data to card */
-mlan_status wlan_sdio_host_to_card(mlan_adapter * pmadapter, t_u8 type,
-				   mlan_buffer * mbuf,
-				   mlan_tx_param * tx_param);
+mlan_status wlan_sdio_host_to_card(mlan_adapter *pmadapter, t_u8 type,
+				   mlan_buffer *mbuf, mlan_tx_param *tx_param);
 mlan_status wlan_set_sdio_gpio_int(IN pmlan_private priv);
 mlan_status wlan_cmd_sdio_gpio_int(pmlan_private pmpriv,
-				   IN HostCmd_DS_COMMAND * cmd,
-				   IN t_u16 cmd_action, IN t_void * pdata_buf);
+				   IN HostCmd_DS_COMMAND *cmd,
+				   IN t_u16 cmd_action, IN t_void *pdata_buf);
 #endif /* _MLAN_SDIO_H */

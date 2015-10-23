@@ -2,7 +2,7 @@
  *
  *  @brief This file declares the exported symbols from MLAN.
  *
- *  Copyright (C) 2008-2011, Marvell International Ltd.
+ *  Copyright (C) 2008-2014, Marvell International Ltd.
  *
  *  This software file (the "File") is distributed by Marvell International
  *  Ltd. under the terms of the GNU General Public License Version 2, June 1991
@@ -43,13 +43,11 @@ EXPORT_SYMBOL(mlan_interrupt);
 
 EXPORT_SYMBOL(mlan_pm_wakeup_card);
 
-EXPORT_SYMBOL(mlan_hist_data_get);
-EXPORT_SYMBOL(mlan_hist_data_clear);
 EXPORT_SYMBOL(mlan_memcpy);
 EXPORT_SYMBOL(mlan_register_peer_mac_cb);
 
 MODULE_DESCRIPTION("M-WLAN MLAN Driver");
 MODULE_AUTHOR("Marvell International Ltd.");
 MODULE_VERSION(MLAN_RELEASE_VERSION);
-MODULE_LICENSE("Marvell Proprietary");
+MODULE_LICENSE("GPL");
 #endif /* LINUX */

@@ -25,18 +25,10 @@ HRESULT MV_CC_MsgQ_PostMsgByID(MV_CC_ServiceID_U32_t 	ServiceID,
 						PVOID pMSG )
 {
 	HRESULT res;
-	MV_CC_DSS_ServiceInfo_MsgQ_t SrvInfo;
 
 	/* Parameter Check */
 	if (pMSG == NULL)
 		MV_CC_DBG_Error(E_INVALIDARG, "MV_CC_MsgQ_PostMsgByID", NULL);
-
-	SrvInfo.m_ServiceID = ServiceID;
-	res = MV_CC_DSS_Inquiry((pMV_CC_DSS_ServiceInfo_t)&SrvInfo);
-	if (res != S_OK) {
-		MV_CC_DBG_Error(res, "MV_CC_MsgQ_PostMsgByID"
-					" MV_CC_DSS_Inquiry", NULL);
-	}
 
 	res = MV_CC_UDP_SendMsg(NULL, ServiceID, pMSG, sizeof(MV_CC_MSG_t));
 	if (res != S_OK) {

@@ -185,6 +185,8 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
 
 void of_fixed_clk_setup(struct device_node *np);
 
+void of_fixed_factor_clk_setup(struct device_node *node);
+
 /**
  * struct clk_gate - gating clock
  *

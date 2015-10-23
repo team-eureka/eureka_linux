@@ -17,6 +17,7 @@ config ARM
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
 	select HARDIRQS_SW_RESEND
+	select HAVE_AOUT
 	select HAVE_ARCH_JUMP_LABEL if !XIP_KERNEL
 	select HAVE_ARCH_KGDB
 	select HAVE_ARCH_SECCOMP_FILTER
@@ -528,11 +529,17 @@ config ARCH_IXP4XX
 
 config ARCH_BERLIN
 	bool "Marvell Berlin Multimedia SoC"
-	select CPU_V7
+	select ARCH_HAS_CPUFREQ
+	select ARCH_HAS_OPP
+	select ARCH_REQUIRE_GPIOLIB
 	select ARM_GIC
-	select MIGHT_HAVE_CACHE_L2X0
 	select CLKDEV_LOOKUP
+	select COMMON_CLK
+	select CPU_V7
 	select GENERIC_CLOCKEVENTS
+	select GENERIC_GPIO
+	select HAVE_SMP
+	select MIGHT_HAVE_CACHE_L2X0
 	select DW_APB_TIMER
 	select SPARSE_IRQ
 	select USE_OF
@@ -1450,6 +1457,17 @@ config ARM_ERRATA_782773
 	 page table walk happens just after updating the existing
 	 with setting page table in L1 data cache.
 
+config ARM_ERRATA_814220
+	bool "ARM errata: Cache maintenance by set/way operations can execute out of order"
+	depends on CPU_V7
+	help
+	  This option enables the fix for erratum 814220 which affecting
+	  Cortex-A7 MPCore r0p2, r0p3, r0p4 and r0p5. The cache maintenance by set/way operation
+	  between different levels can execute out of order. So there will be issues
+	  when L2 flush to L3 complete before L1 flush to L2. Then L2 will contain dirty data
+	  which is not flushed to L3.
+	  This fix is to add dsb between different cache levels. It will make sure
+	  the flush of previous level finish before next level start.
 endmenu
 
 source "arch/arm/common/Kconfig"
